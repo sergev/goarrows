@@ -80,7 +80,7 @@ func main() {
 		lineY++
 		if lineY < sh {
 			livesStr := formatLives(g.Lives, *startLives)
-			left := fmt.Sprintf(" Lives: %s   Arrows: %d", livesStr, g.Board.ArrowCount())
+			left := fmt.Sprintf(" Lives: %s   Cells: %d", livesStr, g.Board.NonEmptyCount())
 			drawStr(s, 0, lineY, sw, left, msgSt)
 		}
 		lineY++

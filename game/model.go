@@ -1,6 +1,6 @@
 package game
 
-// Direction is the facing of an arrow on the board.
+// Direction is the facing of a head’s fire ray.
 type Direction int8
 
 const (
@@ -10,10 +10,13 @@ const (
 	West
 )
 
-// Cell is either empty or an arrow facing a direction.
+// Cell holds a display rune: 0 = empty, otherwise wire (─│┌┐└┘) or head (^v<> / ▲▼◀▶).
 type Cell struct {
-	Empty bool
-	Dir   Direction
+	R rune
+}
+
+func (c Cell) IsEmpty() bool {
+	return c.R == 0
 }
 
 // Board is a rectangular grid of cells, row-major (y then x).
@@ -44,10 +47,11 @@ func (b Board) Clone() Board {
 	return cp
 }
 
-func (b Board) ArrowCount() int {
+// NonEmptyCount counts cells still occupied by path material.
+func (b Board) NonEmptyCount() int {
 	n := 0
 	for _, c := range b.Data {
-		if !c.Empty {
+		if !c.IsEmpty() {
 			n++
 		}
 	}

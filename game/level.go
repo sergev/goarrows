@@ -6,8 +6,8 @@ import (
 	"unicode/utf8"
 )
 
-// ParseLevel parses equal-length lines into a board. Runes:
-// '.' space ' ' = empty; '^' 'v' '<' '>' or '▲' '▼' '◀' '▶' = arrows.
+// ParseLevel parses equal-length lines into a board and validates (full coverage, paths).
+// Allowed: '.' ' ' empty (rejected by ValidateBoard), wires ─│┌┐└┘, heads ^v<> / ▲▼◀▶.
 func ParseLevel(lines []string) (Board, error) {
 	if len(lines) == 0 {
 		return Board{}, fmt.Errorf("level: no rows")
@@ -31,23 +31,37 @@ func ParseLevel(lines []string) (Board, error) {
 			x++
 		}
 	}
+	if err := ValidateBoard(b); err != nil {
+		return Board{}, err
+	}
 	return b, nil
 }
 
 func parseCellRune(r rune) (Cell, error) {
 	switch r {
 	case '.', ' ':
-		return Cell{Empty: true}, nil
-	case '^', '▲':
-		return Cell{Dir: North}, nil
-	case 'v', 'V', '▼':
-		return Cell{Dir: South}, nil
-	case '<', '◀':
-		return Cell{Dir: West}, nil
-	case '>', '▶':
-		return Cell{Dir: East}, nil
+		return Cell{}, nil
+	case '─', '│', '┌', '┐', '└', '┘':
+		return Cell{R: r}, nil
+	case '^', '▲', 'v', 'V', '▼', '<', '◀', '>', '▶':
+		return Cell{R: normalizeHeadRune(r)}, nil
 	default:
 		return Cell{}, fmt.Errorf("invalid rune %q", r)
+	}
+}
+
+func normalizeHeadRune(r rune) rune {
+	switch r {
+	case '^':
+		return '▲'
+	case 'v', 'V':
+		return '▼'
+	case '<':
+		return '◀'
+	case '>':
+		return '▶'
+	default:
+		return r
 	}
 }
 
