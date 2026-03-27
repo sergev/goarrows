@@ -26,19 +26,24 @@ After a win or game over, `n`, `p`, `r`, and `q` behave as indicated on the stat
 ## Flags
 
 - `-lives N` — Starting lives per level (default `3`). Use `-1` for unlimited.
-- `-level PATH` — Load a single level file instead of the embedded pack. Levels are newline-separated rows of equal width; see `levels/data/*.txt` for examples.
+- `-seed N` — 64-bit seed for procedural level generation (default `0`). Same seed reproduces the same sequence of boards.
+- `-level PATH` — Load a single level file instead of procedural levels. Levels are newline-separated rows of equal width; see `levels/data/*.txt` for examples.
+
+## Procedural levels
+
+By default the game uses a **procedural pack**: level *k* (1-based in the HUD) is a random full **(k+2)×(k+2)** grid (level 1 → 3×3, then 4×4, 5×5, …). Boards are built in **reverse removal order** so that at every step at least one arrow can legally fire until the grid is clear. Path lengths are randomized within bounds that scale with the side length so snakes are neither tiny nor whole-board by default. Levels are generated on demand and memoized per run.
 
 ## Project layout
 
 | Package | Role |
 |---------|------|
 | `main` | [tcell](https://github.com/gdamore/tcell) screen setup, input loop, HUD (level name, lives, cell count), status messages, and help overlay. |
-| `game` | Board model (`Board`, `Cell`), level parsing (`ParseLevel` / `ParseLevelString`), port-based adjacency for wires and heads, validation (full grid, degree constraints, one head per component), tracing a path from a head (`PathFromHead`), and fire / win / lose rules (`TryFire`, `RayEscapes`). |
-| `levels` | Embedded `.txt` levels under `levels/data/` (`go:embed`), sorted load order, plus `LoadFile` for a custom path. |
+| `game` | Board model, parsing, validation, `PathFromHead`, `TryFire` / `RayEscapes`, procedural `GenerateFullBoard`, and `VerifySolvable` (backtracking, for tests). |
+| `levels` | `NewProceduralPack` / `Pack.LevelAt` for on-demand boards; `LoadFile` for `-level`; `LoadEmbedded` for tests and sample `.txt` under `levels/data/`. |
 | `ui` | One character per logical cell: `DrawGrid` and display runes. |
 
 The game logic stays independent of the terminal: `TryFire` updates the board and lives; `main` only handles presentation and input.
 
 ## Status
 
-This repo is a **playable skeleton**: core rules, a few sample levels, and a minimal TUI are in place; you can extend it with more levels, polish, or features on top of the same `game` package.
+Playable TUI with procedural full-board levels and optional hand-authored `-level` files; sample grids remain under `levels/data/` for reference and tests.

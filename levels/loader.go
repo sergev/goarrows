@@ -15,10 +15,37 @@ import (
 //go:embed data/*.txt
 var data embed.FS
 
-// Pack is an ordered set of named levels from the embedded data.
+// Pack is an ordered set of levels from embedded files, a single file, or
+// procedural generation (when proc is non-nil).
 type Pack struct {
-	Names  []string
-	Boards []game.Board
+	Names   []string
+	Boards  []game.Board
+	proc    *proceduralSource
+}
+
+// NewProceduralPack returns a pack with unbounded levels: size (i+3)×(i+3)
+// for index i, deterministic per seed.
+func NewProceduralPack(seed int64) *Pack {
+	return &Pack{proc: newProceduralSource(seed)}
+}
+
+// Len returns the number of levels (large constant for procedural packs).
+func (p *Pack) Len() int {
+	if p.proc != nil {
+		return ProceduralLevelCount
+	}
+	return len(p.Boards)
+}
+
+// LevelAt returns the board and display name for index i.
+func (p *Pack) LevelAt(i int) (game.Board, string, error) {
+	if p.proc != nil {
+		return p.proc.levelAt(i)
+	}
+	if i < 0 || i >= len(p.Boards) {
+		return game.Board{}, "", fmt.Errorf("level index %d out of range [0,%d)", i, len(p.Boards))
+	}
+	return p.Boards[i], p.Names[i], nil
 }
 
 // LoadEmbedded parses all embedded .txt levels (sorted by filename).

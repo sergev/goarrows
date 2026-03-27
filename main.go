@@ -14,10 +14,11 @@ import (
 
 func main() {
 	startLives := flag.Int("lives", 3, "starting lives per level (use -1 for unlimited)")
-	levelPath := flag.String("level", "", "path to a single level file (optional; default: embedded pack)")
+	levelPath := flag.String("level", "", "path to a single level file (optional; default: procedural pack)")
+	seed := flag.Int64("seed", 0, "RNG seed for procedural levels (default: 0)")
 	flag.Parse()
 
-	pack, err := loadPack(*levelPath)
+	pack, err := loadPack(*levelPath, *seed)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -76,7 +77,7 @@ func main() {
 		if lineY >= sh {
 			lineY = sh - 1
 		}
-		drawStr(s, 0, lineY, sw, fmt.Sprintf(" %s  [%d/%d]", g.LevelName, idx+1, len(pack.Names)), titleSt)
+		drawStr(s, 0, lineY, sw, fmt.Sprintf(" %s  [%d/%d]", g.LevelName, idx+1, pack.Len()), titleSt)
 		lineY++
 		if lineY < sh {
 			livesStr := formatLives(g.Lives, *startLives)
@@ -134,12 +135,12 @@ func main() {
 						status = ""
 						clampCursor(g, &cx, &cy)
 					case 'n', 'N':
-						idx = (idx + 1) % len(pack.Names)
+						idx = (idx + 1) % pack.Len()
 						g = newGameForLevel(pack, idx, *startLives)
 						status = ""
 						clampCursor(g, &cx, &cy)
 					case 'p', 'P':
-						idx = (idx - 1 + len(pack.Names)) % len(pack.Names)
+						idx = (idx - 1 + pack.Len()) % pack.Len()
 						g = newGameForLevel(pack, idx, *startLives)
 						status = ""
 						clampCursor(g, &cx, &cy)
@@ -180,12 +181,12 @@ func main() {
 					resetLevel(pack, &g, idx, *startLives)
 					status = ""
 				case 'n', 'N':
-					idx = (idx + 1) % len(pack.Names)
+					idx = (idx + 1) % pack.Len()
 					g = newGameForLevel(pack, idx, *startLives)
 					status = ""
 					clampCursor(g, &cx, &cy)
 				case 'p', 'P':
-					idx = (idx - 1 + len(pack.Names)) % len(pack.Names)
+					idx = (idx - 1 + pack.Len()) % pack.Len()
 					g = newGameForLevel(pack, idx, *startLives)
 					status = ""
 					clampCursor(g, &cx, &cy)
@@ -199,7 +200,7 @@ func main() {
 	}
 }
 
-func loadPack(singlePath string) (*levels.Pack, error) {
+func loadPack(singlePath string, seed int64) (*levels.Pack, error) {
 	if singlePath != "" {
 		b, err := levels.LoadFile(singlePath)
 		if err != nil {
@@ -214,23 +215,35 @@ func loadPack(singlePath string) (*levels.Pack, error) {
 			Boards: []game.Board{b},
 		}, nil
 	}
-	return levels.LoadEmbedded()
+	p := levels.NewProceduralPack(seed)
+	if _, _, err := p.LevelAt(0); err != nil {
+		return nil, err
+	}
+	return p, nil
 }
 
 func newGameForLevel(p *levels.Pack, idx, startLives int) *game.Game {
+	b, name, err := p.LevelAt(idx)
+	if err != nil {
+		panic(err)
+	}
 	lives := startLives
 	if lives < 0 {
 		lives = 1 << 30
 	}
-	return game.NewGame(p.Boards[idx], lives, p.Names[idx])
+	return game.NewGame(b, lives, name)
 }
 
 func resetLevel(p *levels.Pack, g **game.Game, idx, startLives int) {
+	b, _, err := p.LevelAt(idx)
+	if err != nil {
+		panic(err)
+	}
 	lives := startLives
 	if lives < 0 {
 		lives = 1 << 30
 	}
-	(*g).Reset(p.Boards[idx], lives)
+	(*g).Reset(b, lives)
 }
 
 func clampCursor(g *game.Game, cx, cy *int) {
