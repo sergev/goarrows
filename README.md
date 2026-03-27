@@ -40,7 +40,7 @@ By default the game uses a **procedural pack**: level *k* (1-based in the HUD) i
 | `main` | [tcell](https://github.com/gdamore/tcell) screen setup, input loop, HUD (level name, lives, cell count), status messages, and help overlay. |
 | `game` | Board model, parsing, validation, `PathFromHead`, `TryFire` / `RayEscapes`, procedural `GenerateFullBoard`, and `VerifySolvable` (backtracking, for tests). |
 | `levels` | `NewProceduralPack` / `Pack.LevelAt` for on-demand boards; `LoadFile` for `-level`; `LoadEmbedded` for tests and sample `.txt` under `levels/data/`. |
-| `ui` | One character per logical cell: `DrawGrid` and display runes. |
+| `ui` | `DrawGrid` maps each logical cell to screen column `2*x` (height `y`), inserts `─` between neighbors when `game.HorizontalLink` is true so horizontal wires read as one continuous line; `GridSize` is `(2*w-1, h)`. |
 
 The game logic stays independent of the terminal: `TryFire` updates the board and lives; `main` only handles presentation and input.
 

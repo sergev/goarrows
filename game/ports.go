@@ -84,6 +84,15 @@ func linked(a, b Cell, dirFromAToB Direction) bool {
 	return linkMask(a)&bitA != 0 && linkMask(b)&bitB != 0
 }
 
+// HorizontalLink reports whether (x,y) and (x+1,y) are mutually connected
+// along the eastward edge (for drawing wide horizontal segments in the UI).
+func HorizontalLink(b Board, x, y int) bool {
+	if !b.InBounds(x, y) || !b.InBounds(x+1, y) {
+		return false
+	}
+	return linked(b.At(x, y), b.At(x+1, y), East)
+}
+
 func dirToPort(d Direction) uint8 {
 	switch d {
 	case North:
