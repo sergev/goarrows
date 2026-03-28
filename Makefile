@@ -23,11 +23,12 @@ clean:
 # For testing, please install gotestsum:
 #	go install gotest.tools/gotestsum@latest
 #
+# Use -timeout 10s so the full suite stays bounded (same as: go test -timeout 10s ./...).
 test: gotestsum
-	gotestsum --format dots -- ./...
+	gotestsum --format dots -- -timeout 10s ./...
 
 cover: gotestsum
-	gotestsum -- -coverprofile=coverage.out ./...
+	gotestsum -- -timeout 10s -coverprofile=coverage.out ./...
 	go tool cover -func=coverage.out
 
 gotestsum:
