@@ -5,8 +5,35 @@ import (
 	"math/rand/v2"
 )
 
-// generateFullBoardGrow places min(w,h) arrow polylines by seeding heads with a one-cell body,
-// extending tails at random until stuck, then accepts only if ValidatePartialBoard,
+// targetArrowCountForSide returns how many arrow polylines to use for an N×N layer:
+// N < 6 → N; N < 10 → N*N/6; otherwise → N*N/10 (integer division).
+func targetArrowCountForSide(n int) int {
+	switch {
+	case n < 6:
+		return n
+	case n < 10:
+		return n * n / 6
+	default:
+		return n * n / 10
+	}
+}
+
+func clampArrowCount(targetArrows, wh int) int {
+	maxArrows := wh / 2
+	if maxArrows < 1 {
+		maxArrows = 1
+	}
+	if targetArrows > maxArrows {
+		targetArrows = maxArrows
+	}
+	if targetArrows < 1 {
+		targetArrows = 1
+	}
+	return targetArrows
+}
+
+// generateFullBoardGrow seeds arrow heads with a one-cell body (count from targetArrowCountForSide),
+// extends tails at random until stuck, then accepts only if ValidatePartialBoard,
 // growPlayfulEnough (at most half the heads have a clear shot at start), and
 // VerifyGreedyFirstClearsBoard succeed.
 func generateFullBoardGrow(w, h int, rng *rand.Rand) (Board, error) {
@@ -18,7 +45,8 @@ func generateFullBoardGrow(w, h int, rng *rand.Rand) (Board, error) {
 		return Board{}, fmt.Errorf("gen: need at least 2 cells (got %d×%d)", w, h)
 	}
 
-	nHeads := minInt(w, h)
+	n := minInt(w, h)
+	nHeads := clampArrowCount(targetArrowCountForSide(n), wh)
 	maxTries := 8000 + 100*wh
 	if maxTries > 60000 {
 		maxTries = 60000
