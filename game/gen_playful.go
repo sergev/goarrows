@@ -15,6 +15,10 @@ func acceptPlayful(b Board, order []placedComponent, w, h int) bool {
 	if wh <= 16 {
 		return true
 	}
+	// Avoid the old dominant pattern: exactly two long snakes on medium/large boards.
+	if wh >= 24 && len(order) == 2 {
+		return false
+	}
 
 	heads := countHeadsOnBoard(b)
 	if heads < 2 {
@@ -22,10 +26,12 @@ func acceptPlayful(b Board, order []placedComponent, w, h int) bool {
 	}
 
 	esc := countInitialRayEscapes(b)
-	// Too many heads that can fire immediately → boring / too easy.
-	maxEsc := minInt(heads-1, maxInt(4, (heads*2)/3+int(math.Ceil(math.Sqrt(float64(wh))))))
-	if esc > maxEsc {
-		return false
+	// Too many heads that can fire immediately → boring / too easy (only pressure large head counts).
+	if heads >= 10 {
+		maxEsc := minInt(heads-1, maxInt(6, (heads*4)/5+int(math.Ceil(math.Sqrt(float64(wh))))))
+		if esc > maxEsc {
+			return false
+		}
 	}
 	// Very large boards: require at least one obvious escape so the level isn't hopelessly blocked.
 	minEsc := 0

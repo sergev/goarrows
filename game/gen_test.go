@@ -110,8 +110,27 @@ func TestGenerateFullBoardPlayfulnessSmoke(t *testing.T) {
 	}
 }
 
+func TestGenerateFullBoardVariedHeadCount(t *testing.T) {
+	// Generator should not collapse to exactly two long snakes on medium boards; expect 3+ heads often.
+	const n = 10
+	ge3 := 0
+	for seed := uint64(1); seed <= 25; seed++ {
+		rng := rand.New(rand.NewPCG(seed, 777))
+		b, err := GenerateFullBoard(n, n, rng)
+		if err != nil {
+			t.Fatalf("seed %d: %v", seed, err)
+		}
+		if countHeads(b) >= 3 {
+			ge3++
+		}
+	}
+	if ge3 < 5 {
+		t.Fatalf("want at least 5/25 boards with 3+ arrow heads, got %d", ge3)
+	}
+}
+
 func TestGenerateFullBoardMultipleComponents(t *testing.T) {
-	// Split-board + reverse multi-segment paths should yield more than one arrowhead.
+	// Greedy / K-band paths should yield more than one arrowhead.
 	cases := []struct {
 		w, h int
 	}{
