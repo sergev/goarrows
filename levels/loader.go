@@ -38,6 +38,23 @@ func (p *Pack) Len() int {
 	return len(p.Boards)
 }
 
+// ProceduralSideLen returns the N in N×N for procedural level index i, or 0 if the pack is not procedural.
+func (p *Pack) ProceduralSideLen(i int) int {
+	if p.proc == nil {
+		return 0
+	}
+	return i + 3
+}
+
+// ProceduralLevelReady reports whether level i is already generated and cached (always true for file-based packs).
+func (p *Pack) ProceduralLevelReady(i int) bool {
+	if p.proc == nil {
+		return true
+	}
+	_, ok := p.proc.memo[i]
+	return ok
+}
+
 // LevelAt returns the board and display name for index i.
 func (p *Pack) LevelAt(i int) (game.Board, string, error) {
 	if p.proc != nil {

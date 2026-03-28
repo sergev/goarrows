@@ -105,13 +105,14 @@ func main() {
 	winSt := def.Foreground(tcell.ColorGreen).Bold(true)
 	helpSt := def.Foreground(tcell.ColorGray)
 
-	idx := 0
-	g := newGameForLevel(pack, idx, *startLives)
-	cx, cy := 0, 0
-	clampCursor(g, &cx, &cy)
 	showHelp := false
 	status := ""
 	var modal *fireOverlay
+	generatingN := 0
+
+	idx := 0
+	var g *game.Game
+	cx, cy := 0, 0
 
 	redraw := func() {
 		s.Clear()
@@ -161,9 +162,14 @@ func main() {
 		if modal != nil {
 			drawFireOverlay(s, sw, sh, modal, def)
 		}
+		if generatingN > 0 {
+			drawGeneratingOverlay(s, sw, sh, generatingN, def)
+		}
 		s.Show()
 	}
 
+	g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
+	clampCursor(g, &cx, &cy)
 	redraw()
 
 	quit := false
@@ -186,7 +192,7 @@ func main() {
 				case tcell.KeyEnter:
 					if g.Won() {
 						idx = (idx + 1) % pack.Len()
-						g = newGameForLevel(pack, idx, *startLives)
+						g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
 						status, modal = "", nil
 						clampCursor(g, &cx, &cy)
 					}
@@ -200,12 +206,12 @@ func main() {
 						clampCursor(g, &cx, &cy)
 					case 'n', 'N':
 						idx = (idx + 1) % pack.Len()
-						g = newGameForLevel(pack, idx, *startLives)
+						g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
 						status, modal = "", nil
 						clampCursor(g, &cx, &cy)
 					case 'p', 'P':
 						idx = (idx - 1 + pack.Len()) % pack.Len()
-						g = newGameForLevel(pack, idx, *startLives)
+						g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
 						status, modal = "", nil
 						clampCursor(g, &cx, &cy)
 					}
@@ -248,12 +254,12 @@ func main() {
 					status, modal = "", nil
 				case 'n', 'N':
 					idx = (idx + 1) % pack.Len()
-					g = newGameForLevel(pack, idx, *startLives)
+					g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
 					status, modal = "", nil
 					clampCursor(g, &cx, &cy)
 				case 'p', 'P':
 					idx = (idx - 1 + pack.Len()) % pack.Len()
-					g = newGameForLevel(pack, idx, *startLives)
+					g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
 					status, modal = "", nil
 					clampCursor(g, &cx, &cy)
 				case '?':
@@ -298,6 +304,17 @@ func newGameForLevel(p *levels.Pack, idx, startLives int) *game.Game {
 		lives = 1 << 30
 	}
 	return game.NewGame(b, lives, name)
+}
+
+func newGameWithGenOverlay(pack *levels.Pack, idx, startLives int, generatingN *int, redraw func()) *game.Game {
+	n := pack.ProceduralSideLen(idx)
+	if n > 0 && !pack.ProceduralLevelReady(idx) {
+		*generatingN = n
+		redraw()
+	}
+	g := newGameForLevel(pack, idx, startLives)
+	*generatingN = 0
+	return g
 }
 
 func resetLevel(p *levels.Pack, g **game.Game, idx, startLives int) {
@@ -390,6 +407,56 @@ func drawStr(s tcell.Screen, x0, y, maxW int, text string, st tcell.Style) {
 		}
 		s.SetContent(col, y, r, nil, st)
 		col++
+	}
+}
+
+func drawGeneratingOverlay(s tcell.Screen, sw, sh, n int, fill tcell.Style) {
+	if n <= 0 {
+		return
+	}
+	lines := []string{fmt.Sprintf(" Creating Level %d×%d... ", n, n)}
+	boxW := 0
+	for _, ln := range lines {
+		if len([]rune(ln)) > boxW {
+			boxW = len([]rune(ln))
+		}
+	}
+	boxW += 4
+	boxH := len(lines) + 4
+	ox := (sw - boxW) / 2
+	oy := (sh - boxH) / 2
+	if ox < 0 {
+		ox = 0
+	}
+	if oy < 0 {
+		oy = 0
+	}
+	st := fill.Foreground(tcell.ColorWhite).Background(tcell.ColorNavy)
+	for j := 0; j < boxH; j++ {
+		for i := 0; i < boxW && i < sw; i++ {
+			x, y := ox+i, oy+j
+			if x < 0 || y < 0 || y >= sh {
+				continue
+			}
+			var r rune = ' '
+			if j == 0 && i == 0 {
+				r = '┌'
+			} else if j == 0 && i == boxW-1 {
+				r = '┐'
+			} else if j == boxH-1 && i == 0 {
+				r = '└'
+			} else if j == boxH-1 && i == boxW-1 {
+				r = '┘'
+			} else if j == 0 || j == boxH-1 {
+				r = '─'
+			} else if i == 0 || i == boxW-1 {
+				r = '│'
+			}
+			s.SetContent(x, y, r, nil, st)
+		}
+	}
+	for li, ln := range lines {
+		drawStr(s, ox+2, oy+2+li, ox+boxW-1, ln, st)
 	}
 }
 
