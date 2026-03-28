@@ -15,6 +15,18 @@ import (
 	"goarrows/ui"
 )
 
+// fireOverlay is a centered modal after a fire outcome (win or game over).
+type fireOverlay struct {
+	positive bool
+	lines    []string
+}
+
+// fireUIResult combines an optional status line (e.g. Blocked) with an optional modal.
+type fireUIResult struct {
+	status  string
+	overlay *fireOverlay
+}
+
 // optionalInt64Flag is a flag.Value for -seed: unset means "not provided on CLI".
 type optionalInt64Flag struct {
 	set   bool
@@ -91,7 +103,6 @@ func main() {
 	msgSt := def.Foreground(tcell.ColorWhite)
 	blockedSt := def.Foreground(tcell.ColorOrange).Bold(true)
 	winSt := def.Foreground(tcell.ColorGreen).Bold(true)
-	loseSt := def.Foreground(tcell.ColorRed).Bold(true)
 	helpSt := def.Foreground(tcell.ColorGray)
 
 	idx := 0
@@ -100,6 +111,7 @@ func main() {
 	clampCursor(g, &cx, &cy)
 	showHelp := false
 	status := ""
+	var modal *fireOverlay
 
 	redraw := func() {
 		s.Clear()
@@ -121,7 +133,7 @@ func main() {
 		if lineY >= sh {
 			lineY = sh - 1
 		}
-		drawStr(s, 0, lineY, sw, fmt.Sprintf(" %s  [%d/%d]", g.LevelName, idx+1, pack.Len()), titleSt)
+		drawStr(s, 0, lineY, sw, fmt.Sprintf(" %s", g.LevelName), titleSt)
 		lineY++
 		if lineY < sh {
 			livesStr := formatLives(g.Lives, *startLives)
@@ -133,10 +145,8 @@ func main() {
 			st := msgSt
 			if strings.HasPrefix(status, "Blocked") {
 				st = blockedSt
-			} else if strings.HasPrefix(status, "You win") || strings.HasPrefix(status, "Cleared") {
+			} else if strings.HasPrefix(status, "Cleared") {
 				st = winSt
-			} else if strings.HasPrefix(status, "Game over") {
-				st = loseSt
 			}
 			drawStr(s, 0, lineY, sw, " "+status, st)
 		}
@@ -147,6 +157,9 @@ func main() {
 
 		if showHelp {
 			drawHelpOverlay(s, sw, sh, base)
+		}
+		if modal != nil {
+			drawFireOverlay(s, sw, sh, modal, def)
 		}
 		s.Show()
 	}
@@ -170,23 +183,30 @@ func main() {
 				switch ev.Key() {
 				case tcell.KeyCtrlC, tcell.KeyEscape:
 					quit = true
+				case tcell.KeyEnter:
+					if g.Won() {
+						idx = (idx + 1) % pack.Len()
+						g = newGameForLevel(pack, idx, *startLives)
+						status, modal = "", nil
+						clampCursor(g, &cx, &cy)
+					}
 				case tcell.KeyRune:
 					switch ev.Rune() {
 					case 'q', 'Q':
 						quit = true
 					case 'r', 'R':
 						resetLevel(pack, &g, idx, *startLives)
-						status = ""
+						status, modal = "", nil
 						clampCursor(g, &cx, &cy)
 					case 'n', 'N':
 						idx = (idx + 1) % pack.Len()
 						g = newGameForLevel(pack, idx, *startLives)
-						status = ""
+						status, modal = "", nil
 						clampCursor(g, &cx, &cy)
 					case 'p', 'P':
 						idx = (idx - 1 + pack.Len()) % pack.Len()
 						g = newGameForLevel(pack, idx, *startLives)
-						status = ""
+						status, modal = "", nil
 						clampCursor(g, &cx, &cy)
 					}
 				}
@@ -206,7 +226,8 @@ func main() {
 			case tcell.KeyRight:
 				moveCursor(g, &cx, &cy, 1, 0)
 			case tcell.KeyEnter:
-				status = applyFire(g, cx, cy, *startLives)
+				fr := applyFire(g, cx, cy, *startLives)
+				status, modal = fr.status, fr.overlay
 			case tcell.KeyRune:
 				switch r := ev.Rune(); r {
 				case 'q', 'Q':
@@ -220,19 +241,20 @@ func main() {
 				case 'j':
 					moveCursor(g, &cx, &cy, 0, 1)
 				case ' ', 'f', 'F':
-					status = applyFire(g, cx, cy, *startLives)
+					fr := applyFire(g, cx, cy, *startLives)
+					status, modal = fr.status, fr.overlay
 				case 'r', 'R':
 					resetLevel(pack, &g, idx, *startLives)
-					status = ""
+					status, modal = "", nil
 				case 'n', 'N':
 					idx = (idx + 1) % pack.Len()
 					g = newGameForLevel(pack, idx, *startLives)
-					status = ""
+					status, modal = "", nil
 					clampCursor(g, &cx, &cy)
 				case 'p', 'P':
 					idx = (idx - 1 + pack.Len()) % pack.Len()
 					g = newGameForLevel(pack, idx, *startLives)
-					status = ""
+					status, modal = "", nil
 					clampCursor(g, &cx, &cy)
 				case '?':
 					showHelp = true
@@ -311,25 +333,45 @@ func moveCursor(g *game.Game, cx, cy *int, dx, dy int) {
 	clampCursor(g, cx, cy)
 }
 
-func applyFire(g *game.Game, cx, cy, startLives int) string {
+func applyFire(g *game.Game, cx, cy, startLives int) fireUIResult {
 	if g.Won() || g.Lost() {
-		return ""
+		return fireUIResult{}
 	}
 	switch game.TryFire(g, cx, cy) {
 	case game.FireNone:
-		return ""
+		return fireUIResult{}
 	case game.FireCleared:
 		if g.Won() {
-			return "You win!  n next  p prev  r replay  q quit"
+			return fireUIResult{
+				overlay: &fireOverlay{
+					positive: true,
+					lines: []string{
+						"You win!",
+						"",
+						"Press Enter for next level",
+						"",
+						"n next  p prev  r replay  q quit",
+					},
+				},
+			}
 		}
-		return "Cleared."
+		return fireUIResult{status: "Cleared."}
 	case game.FireBlocked:
 		if g.Lost() {
-			return "Game over.  r restart  q quit"
+			return fireUIResult{
+				overlay: &fireOverlay{
+					positive: false,
+					lines: []string{
+						"Game over",
+						"",
+						"r restart  q quit",
+					},
+				},
+			}
 		}
-		return "Blocked!"
+		return fireUIResult{status: "Blocked!"}
 	default:
-		return ""
+		return fireUIResult{}
 	}
 }
 
@@ -380,6 +422,60 @@ func drawHelpOverlay(s tcell.Screen, sw, sh int, fill tcell.Style) {
 		oy = 0
 	}
 	st := fill.Foreground(tcell.ColorWhite).Background(tcell.ColorNavy)
+	for j := 0; j < boxH; j++ {
+		for i := 0; i < boxW && i < sw; i++ {
+			x, y := ox+i, oy+j
+			if x < 0 || y < 0 || y >= sh {
+				continue
+			}
+			var r rune = ' '
+			if j == 0 && i == 0 {
+				r = '┌'
+			} else if j == 0 && i == boxW-1 {
+				r = '┐'
+			} else if j == boxH-1 && i == 0 {
+				r = '└'
+			} else if j == boxH-1 && i == boxW-1 {
+				r = '┘'
+			} else if j == 0 || j == boxH-1 {
+				r = '─'
+			} else if i == 0 || i == boxW-1 {
+				r = '│'
+			}
+			s.SetContent(x, y, r, nil, st)
+		}
+	}
+	for li, ln := range lines {
+		drawStr(s, ox+2, oy+2+li, ox+boxW-1, ln, st)
+	}
+}
+
+func drawFireOverlay(s tcell.Screen, sw, sh int, o *fireOverlay, fill tcell.Style) {
+	if o == nil || len(o.lines) == 0 {
+		return
+	}
+	bg := tcell.ColorDarkOliveGreen
+	if !o.positive {
+		bg = tcell.ColorDarkRed
+	}
+	st := fill.Foreground(tcell.ColorWhite).Background(bg)
+	lines := o.lines
+	boxW := 0
+	for _, ln := range lines {
+		if w := len([]rune(ln)); w > boxW {
+			boxW = w
+		}
+	}
+	boxW += 4
+	boxH := len(lines) + 4
+	ox := (sw - boxW) / 2
+	oy := (sh - boxH) / 2
+	if ox < 0 {
+		ox = 0
+	}
+	if oy < 0 {
+		oy = 0
+	}
 	for j := 0; j < boxH; j++ {
 		for i := 0; i < boxW && i < sw; i++ {
 			x, y := ox+i, oy+j
