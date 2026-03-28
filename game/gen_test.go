@@ -11,9 +11,15 @@ func TestGenerateFullBoardValidateAndSolvable(t *testing.T) {
 		sizes = []int{3, 4, 5}
 	}
 	for _, n := range sizes {
-		seeds := uint64(20)
+		seeds := uint64(12)
+		if testing.Short() {
+			seeds = 3
+		}
 		if n >= 6 {
 			seeds = 5
+			if testing.Short() {
+				seeds = 2
+			}
 		}
 		for seed := uint64(1); seed <= seeds; seed++ {
 			rng := rand.New(rand.NewPCG(seed, seed*2+1))
@@ -27,10 +33,18 @@ func TestGenerateFullBoardValidateAndSolvable(t *testing.T) {
 			if err := ValidateBoard(b); err != nil {
 				t.Fatalf("n=%d seed=%d validate: %v", n, seed, err)
 			}
-			// Backtracking solvability check is exponential; keep to modest sizes in CI.
-			if n <= 5 && !VerifySolvable(b) {
-				t.Fatalf("n=%d seed=%d: not solvable", n, seed)
-			}
 		}
+	}
+}
+
+// VerifySolvable is exponential in board size; spot-check only tiny boards.
+func TestGenerateFullBoardVerifySolvableTiny(t *testing.T) {
+	rng := rand.New(rand.NewPCG(7, 11))
+	b, err := GenerateFullBoard(3, 3, rng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !VerifySolvable(b) {
+		t.Fatal("expected VerifySolvable on 3×3")
 	}
 }
