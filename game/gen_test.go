@@ -98,6 +98,18 @@ func TestGenerateFullBoardReproducible(t *testing.T) {
 	}
 }
 
+func TestGenerateFullBoardPlayfulnessSmoke(t *testing.T) {
+	rng := rand.New(rand.NewPCG(2024, 303))
+	b, err := GenerateFullBoard(10, 10, rng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	esc := countInitialRayEscapes(b)
+	if esc < 0 || esc > 80 {
+		t.Fatalf("implausible initial escape count: %d", esc)
+	}
+}
+
 func TestGenerateFullBoardMultipleComponents(t *testing.T) {
 	// Split-board + reverse multi-segment paths should yield more than one arrowhead.
 	cases := []struct {

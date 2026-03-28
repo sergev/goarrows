@@ -31,7 +31,7 @@ After a win or game over, `n`, `p`, `r`, and `q` behave as indicated on the stat
 
 ## Procedural levels
 
-By default the game uses a **procedural pack**: level *k* (1-based in the HUD) is a full **(k+2)×(k+2)** grid (level 1 → 3×3, then 4×4, 5×5, …). Boards are filled using **reverse construction**: the generator places several arrow polylines (split rectangles with random Hamiltonian snakes, plus randomized multi-segment fills) so that firing them in reverse placement order always clears the grid; a single-snake fallback covers edge cases. There are **multiple arrowheads** with varied path lengths and bends. Generation is deterministic for a given RNG seed (`-seed`). Levels are generated on demand and memoized per run.
+By default the game uses a **procedural pack**: level *k* (1-based in the HUD) is a full **(k+2)×(k+2)** grid (level 1 → 3×3, then 4×4, 5×5, …). Boards are filled using **reverse construction**: the generator places several arrow polylines (biased row/column splits with random Hamiltonian snakes, greedy segments with turn-biased growth, optional small zig-zag templates, plus bounded DFS) so that firing them in reverse placement order always clears the grid. **Playfulness heuristics** resample candidates to avoid levels that are too easy (too many immediate shots) or too samey (length/turn diversity); tiny boards and single-snake fallbacks skip the strictest checks. A single-snake fallback still guarantees a valid board when needed. Generation is deterministic for a given RNG seed (`-seed`). Levels are generated on demand and memoized per run.
 
 ## Project layout
 

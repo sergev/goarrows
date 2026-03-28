@@ -20,6 +20,7 @@ type point struct {
 // Hamiltonian snake (variety via flips / transpose / reversal), placed in an order that
 // preserves the ray-clear invariant. Secondary: randomized greedy multi-segment fill.
 // Fallback: a single snake covering the whole board (always succeeds for wh≥2).
+// Accepted boards also pass acceptPlayful when possible (single-snake and tiny grids skip strict playfulness).
 func GenerateFullBoard(w, h int, rng *rand.Rand) (Board, error) {
 	wh := w * h
 	if w <= 0 || h <= 0 {
@@ -29,23 +30,31 @@ func GenerateFullBoard(w, h int, rng *rand.Rand) (Board, error) {
 		return Board{}, fmt.Errorf("gen: need at least 2 cells (got %d×%d)", w, h)
 	}
 
-	// 1) Split-board: two snakes (multiple heads) — fast and reliable for medium+ boards.
+	// 1) Split-board: two snakes — resample until playfulness accepts (when applicable).
 	if wh >= 8 {
-		for attempt := 0; attempt < 24; attempt++ {
+		splitTries := 80 + wh/2
+		if splitTries > 400 {
+			splitTries = 400
+		}
+		for attempt := 0; attempt < splitTries; attempt++ {
 			order, ok := tryGenerateSplitTwoSnakes(w, h, rng)
 			if !ok {
 				continue
 			}
-			if b, err := buildAndVerifyBoard(w, h, wh, order); err == nil {
+			b, err := buildAndVerifyBoard(w, h, wh, order)
+			if err != nil {
+				continue
+			}
+			if acceptPlayful(b, order, w, h) {
 				return b, nil
 			}
 		}
 	}
 
-	// 2) Greedy random multi-segment partition (many cheap restarts).
-	greedyTries := 8000 + 120*wh
-	if greedyTries > 60000 {
-		greedyTries = 60000
+	// 2) Greedy random multi-segment partition.
+	greedyTries := 12000 + 200*wh
+	if greedyTries > 90000 {
+		greedyTries = 90000
 	}
 	var placementOrder []placedComponent
 	for attempt := 0; attempt < greedyTries; attempt++ {
@@ -54,15 +63,19 @@ func GenerateFullBoard(w, h int, rng *rand.Rand) (Board, error) {
 		if !ok {
 			continue
 		}
-		if b, err := buildAndVerifyBoard(w, h, wh, placementOrder); err == nil {
+		b, err := buildAndVerifyBoard(w, h, wh, placementOrder)
+		if err != nil {
+			continue
+		}
+		if acceptPlayful(b, placementOrder, w, h) {
 			return b, nil
 		}
 	}
 
 	// 3) Bounded DFS backtracking.
-	dfsRestarts := 400 + 15*wh
-	if dfsRestarts > 4000 {
-		dfsRestarts = 4000
+	dfsRestarts := 800 + 30*wh
+	if dfsRestarts > 8000 {
+		dfsRestarts = 8000
 	}
 	for attempt := 0; attempt < dfsRestarts; attempt++ {
 		var ok bool
@@ -70,12 +83,16 @@ func GenerateFullBoard(w, h int, rng *rand.Rand) (Board, error) {
 		if !ok {
 			continue
 		}
-		if b, err := buildAndVerifyBoard(w, h, wh, placementOrder); err == nil {
+		b, err := buildAndVerifyBoard(w, h, wh, placementOrder)
+		if err != nil {
+			continue
+		}
+		if acceptPlayful(b, placementOrder, w, h) {
 			return b, nil
 		}
 	}
 
-	// 4) Single-snake fallback (one component).
+	// 4) Single-snake fallback (one component; playfulness skipped inside acceptPlayful).
 	path := generateSnakePathOriented(w, h, rng)
 	if path == nil {
 		return Board{}, fmt.Errorf("gen: could not build board for %d×%d", w, h)
@@ -89,6 +106,8 @@ func buildBoardFromPlacement(w, h, wh int, placementOrder []placedComponent) (Bo
 }
 
 // tryGenerateSplitTwoSnakes builds two disjoint Hamiltonian snakes in a 2-rectangle partition.
+// Jagged or Voronoi-style region boundaries would require Hamiltonian paths on arbitrary polyominoes;
+// those are not implemented here—variety instead comes from biased cut lines and repeated random splits.
 func tryGenerateSplitTwoSnakes(w, h int, rng *rand.Rand) ([]placedComponent, bool) {
 	wh := w * h
 	if wh < 8 {
@@ -109,8 +128,11 @@ func tryGenerateSplitTwoSnakes(w, h int, rng *rand.Rand) ([]placedComponent, boo
 		fns[i], fns[j] = fns[j], fns[i]
 	})
 	for _, fn := range fns {
-		if o, ok := fn(w, h, rng); ok {
-			return o, true
+		// Several random split positions per orientation (biased k inside each attempt).
+		for rep := 0; rep < 5; rep++ {
+			if o, ok := fn(w, h, rng); ok {
+				return o, true
+			}
 		}
 	}
 	return nil, false
@@ -120,7 +142,7 @@ func splitHorizontalTwoSnakes(w, h int, rng *rand.Rand) ([]placedComponent, bool
 	if h < 3 {
 		return nil, false
 	}
-	k := 1 + rng.IntN(h-2)
+	k := pickBiasedSplitK(h-2, rng)
 	if k*w < 2 || (h-k)*w < 2 {
 		return nil, false
 	}
@@ -144,7 +166,7 @@ func splitVerticalTwoSnakes(w, h int, rng *rand.Rand) ([]placedComponent, bool) 
 	if w < 3 {
 		return nil, false
 	}
-	k := 1 + rng.IntN(w-2)
+	k := pickBiasedSplitK(w-2, rng)
 	if k*h < 2 || (w-k)*h < 2 {
 		return nil, false
 	}
@@ -191,6 +213,14 @@ func buildAndVerifyBoard(w, h, wh int, placementOrder []placedComponent) (Board,
 func tryGreedyPartition(w, h, wh int, rng *rand.Rand) ([]placedComponent, bool) {
 	occupied := make([]bool, wh)
 	order := make([]placedComponent, 0, wh/2+2)
+	if wh >= 20 && rng.IntN(14) == 0 {
+		if tpl := tryPlaceRandomTemplate(w, h, occupied, rng); tpl != nil {
+			for _, p := range tpl {
+				occupied[p.y*w+p.x] = true
+			}
+			order = append(order, placedComponent{path: append([]point(nil), tpl...)})
+		}
+	}
 	for countFilled(occupied) < wh {
 		rem := wh - countFilled(occupied)
 		tl := pickTargetLength(rem, rng)
@@ -204,6 +234,64 @@ func tryGreedyPartition(w, h, wh int, rng *rand.Rand) ([]placedComponent, bool) 
 		order = append(order, placedComponent{path: append([]point(nil), path...)})
 	}
 	return order, true
+}
+
+// tryPlaceRandomTemplate places a small fixed zig-zag at a random offset when it satisfies ray-clear rules.
+func tryPlaceRandomTemplate(w, h int, occupied []bool, rng *rand.Rand) []point {
+	templates := [][]point{
+		{{0, 0}, {1, 0}, {1, 1}, {2, 1}},
+		{{0, 0}, {0, 1}, {1, 1}, {2, 1}},
+	}
+	base := templates[rng.IntN(len(templates))]
+	maxX, maxY := 0, 0
+	for _, p := range base {
+		if p.x > maxX {
+			maxX = p.x
+		}
+		if p.y > maxY {
+			maxY = p.y
+		}
+	}
+	if w <= maxX || h <= maxY {
+		return nil
+	}
+	for t := 0; t < 45; t++ {
+		ox := rng.IntN(w - maxX)
+		oy := rng.IntN(h - maxY)
+		path := make([]point, len(base))
+		for i := range base {
+			path[i] = point{base[i].x + ox, base[i].y + oy}
+		}
+		if templatePathValid(w, h, occupied, path) {
+			return path
+		}
+	}
+	return nil
+}
+
+func templatePathValid(w, h int, occupied []bool, path []point) bool {
+	for i := range path {
+		p := path[i]
+		if p.x < 0 || p.y < 0 || p.x >= w || p.y >= h {
+			return false
+		}
+		if occupied[p.y*w+p.x] {
+			return false
+		}
+	}
+	for i := 0; i < len(path)-1; i++ {
+		d := absInt(path[i].x-path[i+1].x) + absInt(path[i].y-path[i+1].y)
+		if d != 1 {
+			return false
+		}
+	}
+	hx, hy := path[0].x, path[0].y
+	dBody := dirFromTo(hx, hy, path[1].x, path[1].y)
+	fire := oppositeDirGen(dBody)
+	if !rayClearFromHead(hx, hy, fire, occupied, w, h) {
+		return false
+	}
+	return true
 }
 
 // partitionBoardDFS finds a full tiling by reverse-placement using backtracking.
@@ -299,6 +387,31 @@ func minInt(a, b int) int {
 	return b
 }
 
+// pickBiasedSplitK returns an integer in [1, span] matching the old 1+rand.IntN(span) distribution
+// but resampling a few times to avoid a perfectly centered split when span is large.
+func pickBiasedSplitK(span int, rng *rand.Rand) int {
+	if span < 1 {
+		return 1
+	}
+	lo, hi := 1, span
+	mid := (lo + hi) / 2
+	for t := 0; t < 20; t++ {
+		k := lo + rng.IntN(hi-lo+1)
+		if span >= 6 && absInt(k-mid) <= 1 {
+			continue
+		}
+		return k
+	}
+	return lo + rng.IntN(hi-lo+1)
+}
+
+func absInt(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
 func countFilled(occupied []bool) int {
 	n := 0
 	for _, v := range occupied {
@@ -311,6 +424,7 @@ func countFilled(occupied []bool) int {
 
 // pickTargetLength chooses how many cells the next component should try to cover.
 // It never picks a length that would leave exactly one cell empty (no valid path of length ≥2).
+// Sampling is skewed toward mid-length segments and occasionally the full remainder.
 func pickTargetLength(rem int, rng *rand.Rand) int {
 	switch rem {
 	case 0, 1:
@@ -323,22 +437,35 @@ func pickTargetLength(rem int, rng *rand.Rand) int {
 			hi = 12
 		}
 		var cands []int
+		var weights []int
+		mid := (2 + hi) / 2
 		for t := 2; t <= hi; t++ {
-			if rem-t != 1 {
-				cands = append(cands, t)
+			if rem-t == 1 {
+				continue
 			}
+			cands = append(cands, t)
+			wt := 3 + absInt(t-mid)
+			if t == rem {
+				wt += 2 + hi/4
+			}
+			weights = append(weights, wt)
 		}
 		if len(cands) == 0 {
 			return rem
 		}
-		if rem > 3 && rng.IntN(8) == 0 {
-			for _, t := range cands {
-				if t == rem {
-					return rem
-				}
+		total := 0
+		for _, w := range weights {
+			total += w
+		}
+		r := rng.IntN(total)
+		s := 0
+		for i, w := range weights {
+			s += w
+			if r < s {
+				return cands[i]
 			}
 		}
-		return cands[rng.IntN(len(cands))]
+		return cands[len(cands)-1]
 	}
 }
 
@@ -388,10 +515,7 @@ func tryPlaceRandomPath(w, h int, occupied []bool, rng *rand.Rand, targetLen int
 				if len(cands) == 0 {
 					break
 				}
-				rng.Shuffle(len(cands), func(i, j int) {
-					cands[i], cands[j] = cands[j], cands[i]
-				})
-				next := cands[0]
+				next := pickBiasedTailStep(prev, tail, cands, rng)
 				path = append(path, next)
 				pathSet[next] = struct{}{}
 			}
@@ -434,6 +558,30 @@ func neighborPoints(tail, prev point, w, h int, occupied []bool, pathSet map[poi
 		out = append(out, np)
 	}
 	return out
+}
+
+// pickBiasedTailStep prefers 90° turns over straight continuation when both exist (more varied shapes).
+func pickBiasedTailStep(prev, tail point, cands []point, rng *rand.Rand) point {
+	if len(cands) == 1 {
+		return cands[0]
+	}
+	incoming := dirFromTo(prev.x, prev.y, tail.x, tail.y)
+	var straight, turn []point
+	for _, c := range cands {
+		out := dirFromTo(tail.x, tail.y, c.x, c.y)
+		if out == incoming {
+			straight = append(straight, c)
+		} else {
+			turn = append(turn, c)
+		}
+	}
+	if len(turn) > 0 && len(straight) > 0 {
+		if rng.IntN(10) < 6 {
+			return turn[rng.IntN(len(turn))]
+		}
+		return straight[rng.IntN(len(straight))]
+	}
+	return cands[rng.IntN(len(cands))]
 }
 
 // verifyReverseConstructionOrder checks that firing heads in reverse placement order
