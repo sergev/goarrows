@@ -6,7 +6,8 @@ import (
 )
 
 // generateFullBoardGrow places min(w,h) arrow polylines by seeding heads with a one-cell body,
-// extending tails at random until stuck, then accepts only if ValidatePartialBoard and
+// extending tails at random until stuck, then accepts only if ValidatePartialBoard,
+// growPlayfulEnough (at most half the heads have a clear shot at start), and
 // VerifyGreedyFirstClearsBoard succeed.
 func generateFullBoardGrow(w, h int, rng *rand.Rand) (Board, error) {
 	if w <= 0 || h <= 0 {
@@ -35,12 +36,38 @@ func generateFullBoardGrow(w, h int, rng *rand.Rand) (Board, error) {
 		if err := ValidatePartialBoard(b); err != nil {
 			continue
 		}
+		if !growPlayfulEnough(b) {
+			continue
+		}
 		if !VerifyGreedyFirstClearsBoard(b) {
 			continue
 		}
 		return b, nil
 	}
 	return Board{}, fmt.Errorf("gen: could not build grow board for %d×%d", w, h)
+}
+
+// growPlayfulEnough rejects boards that are too easy at the start: at most half the heads
+// may have a clear firing ray (RayEscapes). For a single head the check is skipped so
+// solvable tiny cases are still possible.
+func growPlayfulEnough(b Board) bool {
+	total := 0
+	fireable := 0
+	for y := 0; y < b.H; y++ {
+		for x := 0; x < b.W; x++ {
+			if !b.At(x, y).IsHead() {
+				continue
+			}
+			total++
+			if RayEscapes(b, x, y) {
+				fireable++
+			}
+		}
+	}
+	if total <= 1 {
+		return true
+	}
+	return 2*fireable <= total
 }
 
 func tryGrowPartition(w, h, nHeads int, rng *rand.Rand) ([][]point, bool) {

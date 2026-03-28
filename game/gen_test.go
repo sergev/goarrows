@@ -190,6 +190,43 @@ func TestGenerateBoardGrowSmoke(t *testing.T) {
 	if !VerifyGreedyFirstClearsBoard(b) {
 		t.Fatal("expected VerifyGreedyFirstClearsBoard")
 	}
+	fireable := 0
+	heads := 0
+	for y := 0; y < b.H; y++ {
+		for x := 0; x < b.W; x++ {
+			if !b.At(x, y).IsHead() {
+				continue
+			}
+			heads++
+			if RayEscapes(b, x, y) {
+				fireable++
+			}
+		}
+	}
+	if heads >= 2 && 2*fireable > heads {
+		t.Fatalf("grow smoke: want at most half fireable at start, got %d/%d", fireable, heads)
+	}
+}
+
+func TestGrowPlayfulEnough(t *testing.T) {
+	b := NewBoard(5, 2)
+	b.Set(0, 0, Cell{R: '▲'})
+	b.Set(0, 1, Cell{R: '│'})
+	b.Set(4, 0, Cell{R: '▲'})
+	b.Set(4, 1, Cell{R: '│'})
+	if err := ValidatePartialBoard(b); err != nil {
+		t.Fatal(err)
+	}
+	if growPlayfulEnough(b) {
+		t.Fatal("both heads have clear rays: expected not playful enough")
+	}
+
+	single := NewBoard(2, 2)
+	single.Set(0, 0, Cell{R: '▲'})
+	single.Set(0, 1, Cell{R: '│'})
+	if !growPlayfulEnough(single) {
+		t.Fatal("single head: check skipped, expected playful")
+	}
 }
 
 func TestValidateGenAlgorithmGrow(t *testing.T) {

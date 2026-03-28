@@ -25,7 +25,7 @@ type Pack struct {
 
 // NewProceduralPack returns a pack with unbounded levels: size (i+3)×(i+3)
 // for index i, deterministic per seed. algorithm is passed to game.GenerateBoard
-// (e.g. game.GenInverse).
+// (e.g. game.GenGrow or game.GenInverse).
 func NewProceduralPack(seed int64, algorithm string) *Pack {
 	return &Pack{proc: newProceduralSource(seed, algorithm)}
 }

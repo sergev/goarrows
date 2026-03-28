@@ -10,6 +10,10 @@ import (
 // ProceduralLevelCount is the nominal pack length for UI modulo and titles.
 const ProceduralLevelCount = 1 << 20
 
+// proceduralGenMaxTries is how many distinct base seeds (seed, seed+1, …) we try per level
+// when GenerateBoard fails, before giving up.
+const proceduralGenMaxTries = 512
+
 type procMemo struct {
 	b    game.Board
 	name string
@@ -42,14 +46,18 @@ func (p *proceduralSource) levelAt(i int) (game.Board, string, error) {
 	}
 	n := i + 3
 	name := fmt.Sprintf("Level %d (%d×%d)", i+1, n, n)
-	rng := levelRNG(p.seed, i)
-	b, err := game.GenerateBoard(n, n, rng, p.algorithm)
-	if err != nil {
-		p.memo[i] = procMemo{name: name, err: err}
-		return game.Board{}, name, err
+	var b game.Board
+	var err error
+	for delta := int64(0); delta < proceduralGenMaxTries; delta++ {
+		rng := levelRNG(p.seed+delta, i)
+		b, err = game.GenerateBoard(n, n, rng, p.algorithm)
+		if err == nil {
+			p.memo[i] = procMemo{b: b, name: name}
+			return b, name, nil
+		}
 	}
-	p.memo[i] = procMemo{b: b, name: name}
-	return b, name, nil
+	p.memo[i] = procMemo{name: name, err: err}
+	return game.Board{}, name, err
 }
 
 // levelRNG is deterministic for a given (seed, level index).
