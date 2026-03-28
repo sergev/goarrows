@@ -5,6 +5,18 @@ import (
 	"testing"
 )
 
+func countHeads(b Board) int {
+	n := 0
+	for y := 0; y < b.H; y++ {
+		for x := 0; x < b.W; x++ {
+			if b.At(x, y).IsHead() {
+				n++
+			}
+		}
+	}
+	return n
+}
+
 func boardRunesEqual(a, b Board) bool {
 	if a.W != b.W || a.H != b.H || len(a.Data) != len(b.Data) {
 		return false
@@ -83,6 +95,28 @@ func TestGenerateFullBoardReproducible(t *testing.T) {
 	}
 	if !boardRunesEqual(b1, b2) {
 		t.Fatal("same PCG seeds should yield identical boards")
+	}
+}
+
+func TestGenerateFullBoardMultipleComponents(t *testing.T) {
+	// Split-board + reverse multi-segment paths should yield more than one arrowhead.
+	cases := []struct {
+		w, h int
+	}{
+		{8, 8},
+		{10, 10},
+		{6, 9},
+	}
+	for _, tc := range cases {
+		rng := rand.New(rand.NewPCG(uint64(tc.w*97+tc.h), uint64(tc.w*tc.h)+13))
+		b, err := GenerateFullBoard(tc.w, tc.h, rng)
+		if err != nil {
+			t.Fatalf("%d×%d: %v", tc.w, tc.h, err)
+		}
+		h := countHeads(b)
+		if h < 2 {
+			t.Fatalf("%d×%d: want at least 2 arrow heads, got %d", tc.w, tc.h, h)
+		}
 	}
 }
 
