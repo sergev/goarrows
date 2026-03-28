@@ -27,6 +27,7 @@ After a win or game over, `n`, `p`, `r`, and `q` behave as indicated on the stat
 
 - `-lives N` — Starting lives per level (default `3`). Use `-1` for unlimited.
 - `-seed N` — 64-bit seed for procedural level generation (default `0`). Same seed reproduces the same sequence of boards.
+- `-gen NAME` — Procedural generation algorithm (default `inverse`). Ignored when using `-level`. Additional algorithms may be added later.
 - `-level PATH` — Load a single level file instead of procedural levels. Levels are newline-separated rows of equal width; see `levels/data/*.txt` for examples.
 
 ## Procedural levels
@@ -38,8 +39,8 @@ By default the game uses a **procedural pack**: level *k* (1-based in the HUD) i
 | Package | Role |
 |---------|------|
 | `main` | [tcell](https://github.com/gdamore/tcell) screen setup, input loop, HUD (level name, lives, cell count), status messages, and help overlay. |
-| `game` | Board model, parsing, validation, `PathFromHead`, `TryFire` / `RayEscapes`, procedural `GenerateFullBoard`, and `VerifySolvable` (backtracking, for tests). |
-| `levels` | `NewProceduralPack` / `Pack.LevelAt` for on-demand boards; `LoadFile` for `-level`; `LoadEmbedded` for tests and sample `.txt` under `levels/data/`. |
+| `game` | Board model, parsing, validation, `PathFromHead`, `TryFire` / `RayEscapes`, procedural `GenerateBoard` / `GenerateFullBoard` (`GenInverse`), and `VerifySolvable` (backtracking, for tests). |
+| `levels` | `NewProceduralPack(seed, algorithm)` / `Pack.LevelAt` for on-demand boards; `LoadFile` for `-level`; `LoadEmbedded` for tests and sample `.txt` under `levels/data/`. |
 | `ui` | `DrawGrid` maps each logical cell to screen column `2*x` (height `y`), inserts `─` between neighbors when `game.HorizontalLink` is true so horizontal wires read as one continuous line; `GridSize` is `(2*w-1, h)`. |
 
 The game logic stays independent of the terminal: `TryFire` updates the board and lives; `main` only handles presentation and input.

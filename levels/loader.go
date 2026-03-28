@@ -24,9 +24,10 @@ type Pack struct {
 }
 
 // NewProceduralPack returns a pack with unbounded levels: size (i+3)×(i+3)
-// for index i, deterministic per seed.
-func NewProceduralPack(seed int64) *Pack {
-	return &Pack{proc: newProceduralSource(seed)}
+// for index i, deterministic per seed. algorithm is passed to game.GenerateBoard
+// (e.g. game.GenInverse).
+func NewProceduralPack(seed int64, algorithm string) *Pack {
+	return &Pack{proc: newProceduralSource(seed, algorithm)}
 }
 
 // Len returns the number of levels (large constant for procedural packs).

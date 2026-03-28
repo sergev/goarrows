@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 	"math/rand/v2"
+	"strings"
 )
 
 // placedComponent records one polyline placed during generation (head at path[0]).
@@ -14,11 +15,46 @@ type point struct {
 	x, y int
 }
 
+// GenInverse is the name of the inverse polyline construction algorithm (see generateFullBoardInverse).
+const GenInverse = "inverse"
+
+// SupportedGenAlgorithms returns the procedural generation algorithm names accepted by GenerateBoard.
+func SupportedGenAlgorithms() []string {
+	return []string{GenInverse}
+}
+
+// ValidateGenAlgorithm returns an error if s is not a known algorithm name (case-insensitive).
+func ValidateGenAlgorithm(s string) error {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case GenInverse:
+		return nil
+	default:
+		return fmt.Errorf("unknown generation algorithm %q (supported: %s)", strings.TrimSpace(s), strings.Join(SupportedGenAlgorithms(), ", "))
+	}
+}
+
+// GenerateBoard fills a w×h grid using the named procedural algorithm.
+func GenerateBoard(w, h int, rng *rand.Rand, algorithm string) (Board, error) {
+	switch strings.ToLower(strings.TrimSpace(algorithm)) {
+	case GenInverse:
+		return generateFullBoardInverse(w, h, rng)
+	default:
+		return Board{}, fmt.Errorf("gen: unknown generation algorithm %q (supported: %s)", strings.TrimSpace(algorithm), strings.Join(SupportedGenAlgorithms(), ", "))
+	}
+}
+
 // GenerateFullBoard fills a w×h grid with arrow polylines using inverse construction: paths are
 // placed in order so firing them in reverse placement order clears the board. A shuffled cell queue
 // drives candidate heads; each path has length ≥ 2 and satisfies ray-clear from the head. Retries
 // until acceptPlayful passes or the attempt budget is exhausted (no snake or greedy fallback).
+//
+// It is equivalent to GenerateBoard(w, h, rng, GenInverse).
 func GenerateFullBoard(w, h int, rng *rand.Rand) (Board, error) {
+	return GenerateBoard(w, h, rng, GenInverse)
+}
+
+// generateFullBoardInverse implements inverse construction (see GenerateFullBoard).
+func generateFullBoardInverse(w, h int, rng *rand.Rand) (Board, error) {
 	wh := w * h
 	if w <= 0 || h <= 0 {
 		return Board{}, fmt.Errorf("gen: invalid size %d×%d", w, h)

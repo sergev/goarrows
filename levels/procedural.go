@@ -17,14 +17,16 @@ type procMemo struct {
 }
 
 type proceduralSource struct {
-	seed int64
-	memo map[int]procMemo
+	seed      int64
+	algorithm string
+	memo      map[int]procMemo
 }
 
-func newProceduralSource(seed int64) *proceduralSource {
+func newProceduralSource(seed int64, algorithm string) *proceduralSource {
 	return &proceduralSource{
-		seed: seed,
-		memo: make(map[int]procMemo),
+		seed:      seed,
+		algorithm: algorithm,
+		memo:      make(map[int]procMemo),
 	}
 }
 
@@ -41,7 +43,7 @@ func (p *proceduralSource) levelAt(i int) (game.Board, string, error) {
 	n := i + 3
 	name := fmt.Sprintf("Level %d (%d×%d)", i+1, n, n)
 	rng := levelRNG(p.seed, i)
-	b, err := game.GenerateFullBoard(n, n, rng)
+	b, err := game.GenerateBoard(n, n, rng, p.algorithm)
 	if err != nil {
 		p.memo[i] = procMemo{name: name, err: err}
 		return game.Board{}, name, err

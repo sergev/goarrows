@@ -16,9 +16,15 @@ func main() {
 	startLives := flag.Int("lives", 3, "starting lives per level (use -1 for unlimited)")
 	levelPath := flag.String("level", "", "path to a single level file (optional; default: procedural pack)")
 	seed := flag.Int64("seed", 0, "RNG seed for procedural levels (default: 0)")
+	gen := flag.String("gen", game.GenInverse, "procedural generation algorithm: inverse (more may be added later)")
 	flag.Parse()
 
-	pack, err := loadPack(*levelPath, *seed)
+	if err := game.ValidateGenAlgorithm(*gen); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	pack, err := loadPack(*levelPath, *seed, *gen)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -200,7 +206,7 @@ func main() {
 	}
 }
 
-func loadPack(singlePath string, seed int64) (*levels.Pack, error) {
+func loadPack(singlePath string, seed int64, gen string) (*levels.Pack, error) {
 	if singlePath != "" {
 		b, err := levels.LoadFile(singlePath)
 		if err != nil {
@@ -215,7 +221,7 @@ func loadPack(singlePath string, seed int64) (*levels.Pack, error) {
 			Boards: []game.Board{b},
 		}, nil
 	}
-	p := levels.NewProceduralPack(seed)
+	p := levels.NewProceduralPack(seed, gen)
 	if _, _, err := p.LevelAt(0); err != nil {
 		return nil, err
 	}
