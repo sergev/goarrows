@@ -37,13 +37,17 @@ func NominalPorts(r rune) uint8 {
 }
 
 // linkMask returns ports used for adjacency: wires use glyph geometry; heads
-// may attach on any side (exactly one neighbor ends up in EffectivePorts).
+// connect only toward the body (opposite of fire) so adjacent foreign wires
+// do not spuriously link across component boundaries.
 func linkMask(c Cell) uint8 {
 	if c.IsEmpty() {
 		return 0
 	}
 	if c.IsHead() {
-		return PortN | PortE | PortS | PortW
+		if fire, ok := HeadFireDir(c.R); ok {
+			return dirToPort(oppositeDir(fire))
+		}
+		return 0
 	}
 	return NominalPorts(c.R)
 }

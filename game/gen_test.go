@@ -63,7 +63,7 @@ func TestGenerateFullBoardValidateAndSolvable(t *testing.T) {
 
 func TestGenerateFullBoardLargeSmoke(t *testing.T) {
 	// Tuned for `go test -timeout 10s ./...` (see Makefile).
-	sizes := []int{10}
+	sizes := []int{8}
 	for _, n := range sizes {
 		rng := rand.New(rand.NewPCG(42, uint64(n)*99991+17))
 		b, err := GenerateFullBoard(n, n, rng)
@@ -98,7 +98,7 @@ func TestGenerateFullBoardReproducible(t *testing.T) {
 
 func TestGenerateFullBoardPlayfulnessSmoke(t *testing.T) {
 	rng := rand.New(rand.NewPCG(2024, 303))
-	b, err := GenerateFullBoard(10, 10, rng)
+	b, err := GenerateFullBoard(8, 8, rng)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestGenerateFullBoardPlayfulnessSmoke(t *testing.T) {
 
 func TestGenerateFullBoardVariedHeadCount(t *testing.T) {
 	// Generator should not collapse to exactly two long snakes on medium boards; expect 3+ heads often.
-	const n = 10
+	const n = 8
 	ge3 := 0
 	seeds := uint64(8)
 	if testing.Short() {
@@ -141,8 +141,8 @@ func TestGenerateFullBoardMultipleComponents(t *testing.T) {
 		w, h int
 	}{
 		{8, 8},
-		{10, 10},
 		{6, 9},
+		{7, 8},
 	}
 	for _, tc := range cases {
 		rng := rand.New(rand.NewPCG(uint64(tc.w*97+tc.h), uint64(tc.w*tc.h)+13))

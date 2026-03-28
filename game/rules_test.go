@@ -1,6 +1,29 @@
 package game
 
-import "testing"
+import (
+	"testing"
+	"unicode/utf8"
+)
+
+// boardFromLinesNoValidate builds a board like ParseLevel but skips ValidateBoard.
+// Used for cases where ray/fire behavior is tested on layouts that are not valid
+// full puzzles under strict graph rules (e.g. two components with a head firing across a foreign wire).
+func boardFromLinesNoValidate(lines []string) Board {
+	w := utf8.RuneCountInString(lines[0])
+	b := NewBoard(w, len(lines))
+	for y, line := range lines {
+		x := 0
+		for _, r := range line {
+			c, err := parseCellRune(r)
+			if err != nil {
+				panic(err)
+			}
+			b.Set(x, y, c)
+			x++
+		}
+	}
+	return b
+}
 
 func TestRayEscapes_headOnly(t *testing.T) {
 	b, err := ParseLevelString("▲\n│")
@@ -17,10 +40,7 @@ func TestRayEscapes_headOnly(t *testing.T) {
 
 func TestRayEscapes_blocked(t *testing.T) {
 	// Left snake vertical; right column head at bottom fires north into │.
-	b, err := ParseLevelString("▲│\n│▲")
-	if err != nil {
-		t.Fatal(err)
-	}
+	b := boardFromLinesNoValidate([]string{"▲│", "│▲"})
 	if !RayEscapes(b, 0, 0) {
 		t.Fatal("left head should still escape north")
 	}
@@ -58,10 +78,7 @@ func TestTryFire_clearsFullPath(t *testing.T) {
 }
 
 func TestTryFire_blockedLosesLife(t *testing.T) {
-	b, err := ParseLevelString("▲│\n│▲")
-	if err != nil {
-		t.Fatal(err)
-	}
+	b := boardFromLinesNoValidate([]string{"▲│", "│▲"})
 	g := NewGame(b, 2, "t")
 	if TryFire(g, 1, 1) != FireBlocked {
 		t.Fatal("expected blocked")
@@ -86,10 +103,7 @@ func TestTryFire_horizontalClearsAll(t *testing.T) {
 }
 
 func TestLost(t *testing.T) {
-	b, err := ParseLevelString("▲│\n│▲")
-	if err != nil {
-		t.Fatal(err)
-	}
+	b := boardFromLinesNoValidate([]string{"▲│", "│▲"})
 	g := NewGame(b, 1, "t")
 	_ = TryFire(g, 1, 1)
 	if !g.Lost() {
