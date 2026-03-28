@@ -16,7 +16,7 @@ func main() {
 	startLives := flag.Int("lives", 3, "starting lives per level (use -1 for unlimited)")
 	levelPath := flag.String("level", "", "path to a single level file (optional; default: procedural pack)")
 	seed := flag.Int64("seed", 0, "RNG seed for procedural levels (default: 0)")
-	gen := flag.String("gen", game.GenInverse, "procedural generation algorithm: inverse (more may be added later)")
+	gen := flag.String("gen", game.GenInverse, "procedural generation algorithm: inverse, grow")
 	flag.Parse()
 
 	if err := game.ValidateGenAlgorithm(*gen); err != nil {

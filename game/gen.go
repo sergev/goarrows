@@ -18,15 +18,18 @@ type point struct {
 // GenInverse is the name of the inverse polyline construction algorithm (see generateFullBoardInverse).
 const GenInverse = "inverse"
 
+// GenGrow is the name of the greedy growth procedural algorithm (see generateFullBoardGrow).
+const GenGrow = "grow"
+
 // SupportedGenAlgorithms returns the procedural generation algorithm names accepted by GenerateBoard.
 func SupportedGenAlgorithms() []string {
-	return []string{GenInverse}
+	return []string{GenInverse, GenGrow}
 }
 
 // ValidateGenAlgorithm returns an error if s is not a known algorithm name (case-insensitive).
 func ValidateGenAlgorithm(s string) error {
 	switch strings.ToLower(strings.TrimSpace(s)) {
-	case GenInverse:
+	case GenInverse, GenGrow:
 		return nil
 	default:
 		return fmt.Errorf("unknown generation algorithm %q (supported: %s)", strings.TrimSpace(s), strings.Join(SupportedGenAlgorithms(), ", "))
@@ -38,6 +41,8 @@ func GenerateBoard(w, h int, rng *rand.Rand, algorithm string) (Board, error) {
 	switch strings.ToLower(strings.TrimSpace(algorithm)) {
 	case GenInverse:
 		return generateFullBoardInverse(w, h, rng)
+	case GenGrow:
+		return generateFullBoardGrow(w, h, rng)
 	default:
 		return Board{}, fmt.Errorf("gen: unknown generation algorithm %q (supported: %s)", strings.TrimSpace(algorithm), strings.Join(SupportedGenAlgorithms(), ", "))
 	}

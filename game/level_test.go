@@ -39,3 +39,30 @@ func TestValidateBoard_twoHeadsOneComponent(t *testing.T) {
 		t.Fatal("expected component head count error")
 	}
 }
+
+func TestValidatePartialBoard_okSparseArrow(t *testing.T) {
+	// ▲ at (0,0), │ below — rest empty
+	b := NewBoard(2, 2)
+	b.Set(0, 0, Cell{R: '▲'})
+	b.Set(0, 1, Cell{R: '│'})
+	if err := ValidatePartialBoard(b); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidatePartialBoard_noCells(t *testing.T) {
+	b := NewBoard(2, 2)
+	if err := ValidatePartialBoard(b); err == nil {
+		t.Fatal("expected error for empty board")
+	}
+}
+
+func TestValidatePartialBoard_twoHeadsOneComponent(t *testing.T) {
+	b := NewBoard(2, 1)
+	b.Set(0, 0, Cell{R: '▶'})
+	b.Set(1, 0, Cell{R: '▲'})
+	err := ValidatePartialBoard(b)
+	if err == nil {
+		t.Fatal("expected component error")
+	}
+}

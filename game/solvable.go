@@ -1,5 +1,30 @@
 package game
 
+// VerifyGreedyFirstClearsBoard returns true iff repeated greedy clearing removes every arrow:
+// in row-major order (y then x), repeatedly fire the first head whose ray escapes until the board is empty.
+// Background empty cells are unchanged; Won is when no arrow cells remain.
+func VerifyGreedyFirstClearsBoard(b Board) bool {
+	g := NewGame(b.Clone(), 1<<20, "")
+	for !g.Won() {
+		found := false
+		for y := 0; y < g.Board.H && !found; y++ {
+			for x := 0; x < g.Board.W && !found; x++ {
+				if !g.Board.At(x, y).IsHead() || !RayEscapes(g.Board, x, y) {
+					continue
+				}
+				if TryFire(g, x, y) != FireCleared {
+					return false
+				}
+				found = true
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 // VerifySolvable reports whether some sequence of legal fires clears the board.
 // It uses backtracking (exponential); intended for tests and small boards.
 func VerifySolvable(b Board) bool {

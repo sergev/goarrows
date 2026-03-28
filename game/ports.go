@@ -223,6 +223,89 @@ func ValidateBoard(b Board) error {
 	return nil
 }
 
+// ValidatePartialBoard checks mutual links, path shape, and one head per connected component
+// for boards that may contain empty cells (background). Empty cells are ignored.
+// Full-coverage levels should use ValidateBoard instead.
+func ValidatePartialBoard(b Board) error {
+	hasAny := false
+	for y := 0; y < b.H; y++ {
+		for x := 0; x < b.W; x++ {
+			c := b.At(x, y)
+			if c.IsEmpty() {
+				continue
+			}
+			hasAny = true
+			if !c.IsHead() && NominalPorts(c.R) == 0 {
+				return fmt.Errorf("cell (%d,%d): unknown rune %q", x, y, c.R)
+			}
+		}
+	}
+	if !hasAny {
+		return fmt.Errorf("partial board: no non-empty cells")
+	}
+
+	for y := 0; y < b.H; y++ {
+		for x := 0; x < b.W; x++ {
+			c := b.At(x, y)
+			if c.IsEmpty() {
+				continue
+			}
+			eff := EffectivePorts(b, x, y)
+			bits := popcount(eff)
+			if c.IsHead() {
+				if bits != 1 {
+					return fmt.Errorf("cell (%d,%d): head must have exactly one path link (got %d)", x, y, bits)
+				}
+				continue
+			}
+			if bits != 1 && bits != 2 {
+				return fmt.Errorf("cell (%d,%d): wire must have degree 1 (tail) or 2 (internal), got %d", x, y, bits)
+			}
+		}
+	}
+
+	seen := make([]bool, b.W*b.H)
+	var headsPerComp int
+	for y := 0; y < b.H; y++ {
+		for x := 0; x < b.W; x++ {
+			idx := y*b.W + x
+			if seen[idx] || b.At(x, y).IsEmpty() {
+				continue
+			}
+			headsPerComp = 0
+			queue := []struct{ x, y int }{{x, y}}
+			seen[idx] = true
+			for qi := 0; qi < len(queue); qi++ {
+				cx, cy := queue[qi].x, queue[qi].y
+				if b.At(cx, cy).IsHead() {
+					headsPerComp++
+				}
+				eff := EffectivePorts(b, cx, cy)
+				try := func(nx, ny int, port uint8) {
+					if eff&port == 0 {
+						return
+					}
+					nidx := ny*b.W + nx
+					if seen[nidx] {
+						return
+					}
+					seen[nidx] = true
+					queue = append(queue, struct{ x, y int }{nx, ny})
+				}
+				try(cx, cy-1, PortN)
+				try(cx+1, cy, PortE)
+				try(cx, cy+1, PortS)
+				try(cx-1, cy, PortW)
+			}
+			if headsPerComp != 1 {
+				return fmt.Errorf("component starting at (%d,%d): want exactly 1 head, got %d", x, y, headsPerComp)
+			}
+		}
+	}
+
+	return nil
+}
+
 func popcount(m uint8) int {
 	n := 0
 	for m != 0 {

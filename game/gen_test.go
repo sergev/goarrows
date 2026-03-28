@@ -168,3 +168,35 @@ func TestGenerateFullBoardVerifySolvableTiny(t *testing.T) {
 		t.Fatal("expected VerifySolvable on 3×3")
 	}
 }
+
+func TestVerifyGreedyFirstClearsBoard_verticalArrow(t *testing.T) {
+	b := NewBoard(2, 2)
+	b.Set(0, 0, Cell{R: '▲'})
+	b.Set(0, 1, Cell{R: '│'})
+	if !VerifyGreedyFirstClearsBoard(b) {
+		t.Fatal("expected greedy clear")
+	}
+}
+
+func TestGenerateBoardGrowSmoke(t *testing.T) {
+	rng := rand.New(rand.NewPCG(99, 101))
+	b, err := GenerateBoard(7, 7, rng, GenGrow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidatePartialBoard(b); err != nil {
+		t.Fatal(err)
+	}
+	if !VerifyGreedyFirstClearsBoard(b) {
+		t.Fatal("expected VerifyGreedyFirstClearsBoard")
+	}
+}
+
+func TestValidateGenAlgorithmGrow(t *testing.T) {
+	if err := ValidateGenAlgorithm("grow"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateGenAlgorithm("GROW"); err != nil {
+		t.Fatal(err)
+	}
+}

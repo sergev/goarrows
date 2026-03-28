@@ -27,19 +27,19 @@ After a win or game over, `n`, `p`, `r`, and `q` behave as indicated on the stat
 
 - `-lives N` — Starting lives per level (default `3`). Use `-1` for unlimited.
 - `-seed N` — 64-bit seed for procedural level generation (default `0`). Same seed reproduces the same sequence of boards.
-- `-gen NAME` — Procedural generation algorithm (default `inverse`). Ignored when using `-level`. Additional algorithms may be added later.
+- `-gen NAME` — Procedural generation algorithm (default `inverse`). Values: `inverse` (full grid, reverse construction), `grow` (sparse multi-arrow growth with greedy-clear acceptance). Ignored when using `-level`.
 - `-level PATH` — Load a single level file instead of procedural levels. Levels are newline-separated rows of equal width; see `levels/data/*.txt` for examples.
 
 ## Procedural levels
 
-By default the game uses a **procedural pack**: level *k* (1-based in the HUD) is a full **(k+2)×(k+2)** grid (level 1 → 3×3, then 4×4, 5×5, …). Boards are filled using **reverse construction**: first a **randomized greedy** walk that lays multiple polylines (turn-biased growth, optional small zig-zag templates), then **K horizontal bands** (K≥3), each band a random Hamiltonian snake—so typical boards have **three or more** arrowheads, not a fixed two-snake split. **Playfulness heuristics** resample to avoid “exactly two long snakes” on medium/large grids and to limit overly easy layouts; tiny boards and single-snake fallbacks skip the strictest checks. Generation is deterministic for a given RNG seed (`-seed`). Levels are generated on demand and memoized per run.
+By default the game uses a **procedural pack**: level *k* (1-based in the HUD) is a **(k+2)×(k+2)** grid (level 1 → 3×3, then 4×4, 5×5, …). With **`-gen inverse`** (default), the board is **fully tiled** using **reverse construction**: a randomized greedy walk that lays multiple polylines (turn-biased growth, optional small zig-zag templates), then **K horizontal bands** (K≥3), each band a random Hamiltonian snake—so typical boards have **three or more** arrowheads. **Playfulness heuristics** resample to avoid “exactly two long snakes” on medium/large grids; tiny boards and single-snake fallbacks skip the strictest checks. With **`-gen grow`**, the generator seeds `min(n,n)` small arrows and extends them at random until stuck; the board may have **empty cells**, and a board is accepted only if **greedy row-major clearing** (repeatedly fire the first head whose ray escapes) removes every arrow. Generation is deterministic for a given RNG seed (`-seed`). Levels are generated on demand and memoized per run.
 
 ## Project layout
 
 | Package | Role |
 |---------|------|
 | `main` | [tcell](https://github.com/gdamore/tcell) screen setup, input loop, HUD (level name, lives, cell count), status messages, and help overlay. |
-| `game` | Board model, parsing, validation, `PathFromHead`, `TryFire` / `RayEscapes`, procedural `GenerateBoard` / `GenerateFullBoard` (`GenInverse`), and `VerifySolvable` (backtracking, for tests). |
+| `game` | Board model, parsing, validation, `PathFromHead`, `TryFire` / `RayEscapes`, procedural `GenerateBoard` (`GenInverse`, `GenGrow`, `ValidatePartialBoard`, `VerifyGreedyFirstClearsBoard`), `GenerateFullBoard`, and `VerifySolvable` (backtracking, for tests). |
 | `levels` | `NewProceduralPack(seed, algorithm)` / `Pack.LevelAt` for on-demand boards; `LoadFile` for `-level`; `LoadEmbedded` for tests and sample `.txt` under `levels/data/`. |
 | `ui` | `DrawGrid` maps each logical cell to screen column `2*x` (height `y`), inserts `─` between neighbors when `game.HorizontalLink` is true so horizontal wires read as one continuous line; `GridSize` is `(2*w-1, h)`. |
 
