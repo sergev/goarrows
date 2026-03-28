@@ -4,7 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+	"testing"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"goarrows/game"
@@ -12,10 +15,44 @@ import (
 	"goarrows/ui"
 )
 
+// optionalInt64Flag is a flag.Value for -seed: unset means "not provided on CLI".
+type optionalInt64Flag struct {
+	set   bool
+	value int64
+}
+
+func (o *optionalInt64Flag) String() string {
+	if !o.set {
+		return ""
+	}
+	return strconv.FormatInt(o.value, 10)
+}
+
+func (o *optionalInt64Flag) Set(s string) error {
+	v, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return err
+	}
+	o.value = v
+	o.set = true
+	return nil
+}
+
+func resolveProceduralSeed(f *optionalInt64Flag) int64 {
+	if f.set {
+		return f.value
+	}
+	if testing.Testing() {
+		return 0
+	}
+	return time.Now().UnixNano()
+}
+
 func main() {
 	startLives := flag.Int("lives", 3, "starting lives per level (use -1 for unlimited)")
 	levelPath := flag.String("level", "", "path to a single level file (optional; default: procedural pack)")
-	seed := flag.Int64("seed", 0, "RNG seed for procedural levels (default: 0)")
+	seedFlag := &optionalInt64Flag{}
+	flag.Var(seedFlag, "seed", "base RNG seed for procedural levels (omit for random from clock; -seed 0 fixes zero)")
 	gen := flag.String("gen", game.GenGrow, "procedural generation algorithm: grow (default), inverse")
 	flag.Parse()
 
@@ -24,7 +61,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	pack, err := loadPack(*levelPath, *seed, *gen)
+	seed := resolveProceduralSeed(seedFlag)
+	pack, err := loadPack(*levelPath, seed, *gen)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
