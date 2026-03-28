@@ -31,7 +31,7 @@ After a win or game over, `n`, `p`, `r`, and `q` behave as indicated on the stat
 
 ## Procedural levels
 
-By default the game uses a **procedural pack**: level *k* (1-based in the HUD) is a random full **(k+2)×(k+2)** grid (level 1 → 3×3, then 4×4, 5×5, …). Boards are built in **reverse removal order** so that at every step at least one arrow can legally fire until the grid is clear. Path lengths are randomized within bounds that scale with the side length so snakes are neither tiny nor whole-board by default. Levels are generated on demand and memoized per run.
+By default the game uses a **procedural pack**: level *k* (1-based in the HUD) is a full **(k+2)×(k+2)** grid (level 1 → 3×3, then 4×4, 5×5, …). Each level is a **single snake** (one arrowhead, one polyline through every cell). Variety comes from random flips / optional transpose on square boards / path reversal; generation is **O(cells)** and deterministic for a given RNG seed. Levels are generated on demand and memoized per run.
 
 ## Project layout
 

@@ -6,104 +6,161 @@ import (
 )
 
 // placedComponent records one polyline placed during generation (head at path[0]).
-// placementOrder is the order paths were committed: first entry is the first path
-// placed on an empty board; forward play removes paths in reverse order.
 type placedComponent struct {
 	path []point
 }
 
-const (
-	maxRestart      = 8000
-	maxRestartLarge = 16000 // more attempts for bigger boards where greedy often needs retries
-	maxGrowAttempts = 1200  // inner random trials in tryGrowPath
-)
-
-// GenerateFullBoard fills a w×h grid with disjoint arrow paths using reverse
-// construction so that at every forward step at least one head can fire until
-// the board is clear. It retries with the same RNG stream on failure.
-func GenerateFullBoard(w, h int, rng *rand.Rand) (Board, error) {
-	wh := w * h
-	restarts := maxRestart
-	if wh >= 30 {
-		restarts = maxRestartLarge
-	}
-	for attempt := 0; attempt < restarts; attempt++ {
-		occ := make([]bool, wh)
-		grid := make([]rune, wh)
-		emptyCount := wh
-		var placementOrder []placedComponent
-		okFill := true
-		fillSteps := 0
-		maxFillSteps := wh*wh + 80
-		for emptyCount > 0 && okFill {
-			fillSteps++
-			if fillSteps > maxFillSteps {
-				okFill = false
-				break
-			}
-			if !tryPlaceOnePath(w, h, occ, grid, &emptyCount, rng, &placementOrder) {
-				okFill = false
-			}
-		}
-
-		if !okFill || emptyCount != 0 {
-			continue
-		}
-
-		b := NewBoard(w, h)
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
-				b.Set(x, y, Cell{R: grid[y*w+x]})
-			}
-		}
-		if err := ValidateBoard(b); err != nil {
-			continue
-		}
-		if !verifyReverseConstructionOrder(b, placementOrder) {
-			continue
-		}
-		return b, nil
-	}
-	return Board{}, fmt.Errorf("gen: could not generate a valid %d×%d board", w, h)
+type point struct {
+	x, y int
 }
 
-// tryPlaceOnePath tries candidate lengths (and fallback R) to place one path; returns true on success.
-func tryPlaceOnePath(w, h int, occ []bool, grid []rune, emptyCount *int, rng *rand.Rand, placementOrder *[]placedComponent) bool {
-	R := *emptyCount
-	placed := false
-	for _, L := range candidateLengths(w, h, R, rng) {
-		path, ok := tryGrowPath(w, h, occ, L, rng)
-		if !ok {
-			continue
-		}
-		// Leaving exactly one empty cell makes completion impossible (paths need length >= 2).
-		if R-len(path) == 1 {
-			continue
-		}
-		if err := paintPath(grid, w, path); err != nil {
-			continue
-		}
-		for _, p := range path {
-			occ[p.y*w+p.x] = true
-		}
-		*emptyCount -= len(path)
-		*placementOrder = append(*placementOrder, placedComponent{path: append([]point(nil), path...)})
-		return true
+// GenerateFullBoard fills a w×h grid with a single snake path covering every cell.
+// Variety comes from RNG-driven flips / transpose (square) / reversal. The path is
+// oriented so the head can fire off the edge in one step (required on a full board).
+func GenerateFullBoard(w, h int, rng *rand.Rand) (Board, error) {
+	wh := w * h
+	if w <= 0 || h <= 0 {
+		return Board{}, fmt.Errorf("gen: invalid size %d×%d", w, h)
 	}
-	if !placed && R >= 2 {
-		path, ok := tryGrowPath(w, h, occ, R, rng)
-		if ok && R-len(path) != 1 {
-			if err := paintPath(grid, w, path); err == nil {
-				for _, p := range path {
-					occ[p.y*w+p.x] = true
-				}
-				*emptyCount -= len(path)
-				*placementOrder = append(*placementOrder, placedComponent{path: append([]point(nil), path...)})
-				return true
+	if wh < 2 {
+		return Board{}, fmt.Errorf("gen: need at least 2 cells (got %d×%d)", w, h)
+	}
+
+	path := generateSnakePathOriented(w, h, rng)
+	if path == nil {
+		return Board{}, fmt.Errorf("gen: could not build snake for %d×%d board", w, h)
+	}
+
+	grid := make([]rune, wh)
+	if err := paintPath(grid, w, path); err != nil {
+		return Board{}, err
+	}
+
+	b := NewBoard(w, h)
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			b.Set(x, y, Cell{R: grid[y*w+x]})
+		}
+	}
+	if err := ValidateBoard(b); err != nil {
+		return Board{}, err
+	}
+	placementOrder := []placedComponent{{path: append([]point(nil), path...)}}
+	if !verifyReverseConstructionOrder(b, placementOrder) {
+		return Board{}, fmt.Errorf("gen: internal validation failed for %d×%d board", w, h)
+	}
+	return b, nil
+}
+
+// buildSnakePathRowMajor visits every cell in row-major order with alternating direction.
+func buildSnakePathRowMajor(w, h int) []point {
+	out := make([]point, 0, w*h)
+	for y := 0; y < h; y++ {
+		if y%2 == 0 {
+			for x := 0; x < w; x++ {
+				out = append(out, point{x, y})
+			}
+		} else {
+			for x := w - 1; x >= 0; x-- {
+				out = append(out, point{x, y})
 			}
 		}
 	}
-	return false
+	return out
+}
+
+// buildSnakePathColMajor visits every cell in column-major order with alternating direction.
+func buildSnakePathColMajor(w, h int) []point {
+	out := make([]point, 0, w*h)
+	for x := 0; x < w; x++ {
+		if x%2 == 0 {
+			for y := 0; y < h; y++ {
+				out = append(out, point{x, y})
+			}
+		} else {
+			for y := h - 1; y >= 0; y-- {
+				out = append(out, point{x, y})
+			}
+		}
+	}
+	return out
+}
+
+func applyRandomPathTransforms(path []point, w, h int, rng *rand.Rand) []point {
+	out := make([]point, len(path))
+	copy(out, path)
+	flipX := rng.IntN(2) == 1
+	flipY := rng.IntN(2) == 1
+	transpose := w == h && rng.IntN(2) == 1
+	if rng.IntN(2) == 1 {
+		reversePointsInPlace(out)
+	}
+	for i := range out {
+		x, y := out[i].x, out[i].y
+		if flipX {
+			x = w - 1 - x
+		}
+		if flipY {
+			y = h - 1 - y
+		}
+		if transpose {
+			x, y = y, x
+		}
+		out[i] = point{x, y}
+	}
+	return out
+}
+
+func reversePointsInPlace(p []point) {
+	for i, j := 0, len(p)-1; i < j; i, j = i+1, j-1 {
+		p[i], p[j] = p[j], p[i]
+	}
+}
+
+// orientPathForHeadEscape ensures path[0] is the head and the fire ray leaves the board
+// on the first step (required when every cell is occupied).
+func orientPathForHeadEscape(path []point, w, h int) []point {
+	if len(path) < 2 {
+		return nil
+	}
+	if headRayExitsBoard(path, w, h) {
+		return path
+	}
+	path2 := append([]point(nil), path...)
+	reversePointsInPlace(path2)
+	if headRayExitsBoard(path2, w, h) {
+		return path2
+	}
+	// Alternate Hamiltonian path; transforms were applied — rebuild base alt and retry once.
+	return nil
+}
+
+// generateSnakePathOriented tries row-major then column-major snake patterns with RNG transforms.
+func generateSnakePathOriented(w, h int, rng *rand.Rand) []point {
+	candidates := []func(int, int) []point{
+		buildSnakePathRowMajor,
+		buildSnakePathColMajor,
+	}
+	for _, build := range candidates {
+		path := build(w, h)
+		path = applyRandomPathTransforms(path, w, h, rng)
+		if oriented := orientPathForHeadEscape(path, w, h); oriented != nil {
+			return oriented
+		}
+	}
+	return nil
+}
+
+func headRayExitsBoard(path []point, w, h int) bool {
+	if len(path) < 2 {
+		return false
+	}
+	hx, hy := path[0].x, path[0].y
+	dBody := dirFromTo(hx, hy, path[1].x, path[1].y)
+	fire := oppositeDirGen(dBody)
+	dx, dy := Delta(fire)
+	cx, cy := hx+dx, hy+dy
+	return cx < 0 || cx >= w || cy < 0 || cy >= h
 }
 
 // verifyReverseConstructionOrder checks that firing heads in reverse placement order
@@ -124,165 +181,6 @@ func verifyReverseConstructionOrder(b Board, placementOrder []placedComponent) b
 		}
 	}
 	return g.Won()
-}
-
-type point struct {
-	x, y int
-}
-
-func candidateLengths(w, h, R int, rng *rand.Rand) []int {
-	if R <= 2 {
-		return []int{R}
-	}
-	n := max(w, h)
-	Lmin := max(2, min(4, n))
-	Lmax := min(R, max(2*n, 6))
-	if Lmax < Lmin {
-		Lmax = Lmin
-	}
-	var cand []int
-	for L := Lmin; L <= Lmax && L <= R; L++ {
-		rem := R - L
-		if rem == 1 {
-			continue
-		}
-		cand = append(cand, L)
-	}
-	if len(cand) == 0 {
-		return []int{R}
-	}
-	rng.Shuffle(len(cand), func(i, j int) { cand[i], cand[j] = cand[j], cand[i] })
-	return cand
-}
-
-func rayHitsOccupied(hx, hy int, fire Direction, occ []bool, w, h int) bool {
-	dx, dy := Delta(fire)
-	for x, y := hx+dx, hy+dy; x >= 0 && x < w && y >= 0 && y < h; x, y = x+dx, y+dy {
-		if occ[y*w+x] {
-			return true
-		}
-	}
-	return false
-}
-
-// headRayClear returns true iff every in-bounds cell along the ray from (hx,hy) in
-// direction fire is false in block (head cell itself is not on the ray).
-func headRayClear(hx, hy int, fire Direction, block []bool, w, h int) bool {
-	dx, dy := Delta(fire)
-	for x, y := hx+dx, hy+dy; x >= 0 && x < w && y >= 0 && y < h; x, y = x+dx, y+dy {
-		if block[y*w+x] {
-			return false
-		}
-	}
-	return true
-}
-
-// emptyNeighborCount counts orthogonal empty neighbors of (x,y) excluding prev and blocked cells.
-func emptyNeighborCount(x, y, prevx, prevy int, occ, inPath []bool, w, h int) int {
-	n := 0
-	for _, nd := range []Direction{North, South, East, West} {
-		dx, dy := Delta(nd)
-		nx, ny := x+dx, y+dy
-		if nx < 0 || nx >= w || ny < 0 || ny >= h {
-			continue
-		}
-		if nx == prevx && ny == prevy {
-			continue
-		}
-		if occ[ny*w+nx] || inPath[ny*w+nx] {
-			continue
-		}
-		n++
-	}
-	return n
-}
-
-func tryGrowPath(w, h int, occ []bool, want int, rng *rand.Rand) ([]point, bool) {
-	wh := w * h
-	empty := make([]point, 0, wh)
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			if !occ[y*w+x] {
-				empty = append(empty, point{x, y})
-			}
-		}
-	}
-	if want > len(empty) || want < 2 {
-		return nil, false
-	}
-	for attempt := 0; attempt < maxGrowAttempts; attempt++ {
-		H := empty[rng.IntN(len(empty))]
-		dirs := []Direction{North, South, East, West}
-		rng.Shuffle(len(dirs), func(i, j int) { dirs[i], dirs[j] = dirs[j], dirs[i] })
-		for _, d := range dirs {
-			dx, dy := Delta(d)
-			bx, by := H.x+dx, H.y+dy
-			if bx < 0 || bx >= w || by < 0 || by >= h {
-				continue
-			}
-			if occ[by*w+bx] {
-				continue
-			}
-			fire := oppositeDirGen(d)
-			if rayHitsOccupied(H.x, H.y, fire, occ, w, h) {
-				continue
-			}
-			path := []point{H, {bx, by}}
-			inPath := make([]bool, wh)
-			inPath[H.y*w+H.x] = true
-			inPath[by*w+bx] = true
-			for len(path) < want {
-				tail := path[len(path)-1]
-				prev := path[len(path)-2]
-				var cands []point
-				bestScore := -1
-				for _, nd := range []Direction{North, South, East, West} {
-					ndx, ndy := Delta(nd)
-					nx, ny := tail.x+ndx, tail.y+ndy
-					if nx < 0 || nx >= w || ny < 0 || ny >= h {
-						continue
-					}
-					if nx == prev.x && ny == prev.y {
-						continue
-					}
-					if occ[ny*w+nx] || inPath[ny*w+nx] {
-						continue
-					}
-					sc := emptyNeighborCount(nx, ny, tail.x, tail.y, occ, inPath, w, h)
-					if sc > bestScore {
-						bestScore = sc
-						cands = cands[:0]
-						cands = append(cands, point{nx, ny})
-					} else if sc == bestScore {
-						cands = append(cands, point{nx, ny})
-					}
-				}
-				if len(cands) == 0 {
-					break
-				}
-				// Prefer extensions with more empty escape routes for the tail; tie-break at random.
-				nxt := cands[rng.IntN(len(cands))]
-				path = append(path, nxt)
-				inPath[nxt.y*w+nxt.x] = true
-			}
-			if len(path) == want {
-				fire := oppositeDirGen(d)
-				block := make([]bool, wh)
-				for i := range occ {
-					if occ[i] {
-						block[i] = true
-					}
-				}
-				for _, p := range path {
-					block[p.y*w+p.x] = true
-				}
-				if headRayClear(H.x, H.y, fire, block, w, h) {
-					return path, true
-				}
-			}
-		}
-	}
-	return nil, false
 }
 
 func oppositeDirGen(d Direction) Direction {
