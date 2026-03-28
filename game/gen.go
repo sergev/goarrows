@@ -21,6 +21,14 @@ const GenInverse = "inverse"
 // GenGrow is the name of the greedy growth procedural algorithm (see generateFullBoardGrow).
 const GenGrow = "grow"
 
+// inverseStraightChance10 is P(straight)/10 when both straight and turn tail steps exist
+// (inverse polyline growth via tryPlaceRandomPath). Matches historical 40% straight bias.
+const inverseStraightChance10 = 4
+
+// growStraightChance10 is P(straight)/10 when both straight and turn tail steps exist
+// (grow algorithm extensions in tryGrowPartition).
+const growStraightChance10 = 9
+
 // SupportedGenAlgorithms returns the procedural generation algorithm names accepted by GenerateBoard.
 func SupportedGenAlgorithms() []string {
 	return []string{GenInverse, GenGrow}
@@ -229,7 +237,7 @@ func tryPlaceRandomPath(w, h int, occupied []bool, rng *rand.Rand, targetLen int
 				if len(cands) == 0 {
 					break
 				}
-				next := pickBiasedTailStep(prev, tail, cands, rng)
+				next := pickBiasedTailStep(prev, tail, cands, rng, inverseStraightChance10)
 				path = append(path, next)
 				pathSet[next] = struct{}{}
 			}
@@ -369,7 +377,9 @@ func neighborPoints(tail, prev point, w, h int, occupied []bool, pathSet map[poi
 	return out
 }
 
-func pickBiasedTailStep(prev, tail point, cands []point, rng *rand.Rand) point {
+// pickBiasedTailStep chooses the next cell when extending a polyline tail. When both a straight
+// continuation and a turn are legal, straightChance10 out of 10 rolls pick straight.
+func pickBiasedTailStep(prev, tail point, cands []point, rng *rand.Rand, straightChance10 int) point {
 	if len(cands) == 1 {
 		return cands[0]
 	}
@@ -384,10 +394,10 @@ func pickBiasedTailStep(prev, tail point, cands []point, rng *rand.Rand) point {
 		}
 	}
 	if len(turn) > 0 && len(straight) > 0 {
-		if rng.IntN(10) < 6 {
-			return turn[rng.IntN(len(turn))]
+		if rng.IntN(10) < straightChance10 {
+			return straight[rng.IntN(len(straight))]
 		}
-		return straight[rng.IntN(len(straight))]
+		return turn[rng.IntN(len(turn))]
 	}
 	return cands[rng.IntN(len(cands))]
 }

@@ -101,7 +101,7 @@ func tryGrowPartition(w, h, nHeads int, rng *rand.Rand) ([][]point, bool) {
 			if len(cands) == 0 {
 				continue
 			}
-			next := pickBiasedTailStep(prev, tail, cands, rng)
+			next := pickBiasedTailStep(prev, tail, cands, rng, growStraightChance10)
 			path = append(path, next)
 			paths[pi] = path
 			occupied[next.y*w+next.x] = true
