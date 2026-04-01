@@ -493,18 +493,23 @@ func buildPointerFrames(b game.Board, path, ray []struct{ X, Y int }, headRune r
 	if !ok {
 		return nil, false
 	}
+	dx, dy := game.Delta(fireDir)
 	bodyRune := straightBodyRune(fireDir)
 	cur := make([]ui.OverlayCell, len(path))
 	for i, p := range path {
 		cur[i] = ui.OverlayCell{X: p.X, Y: p.Y, R: b.At(p.X, p.Y).R}
 	}
-	frames := make([]ui.FireAnimOverlay, 0, len(ray))
-	for i := 0; i < len(ray); i++ {
+	// Keep animating after head reaches the boundary cell so the tail also
+	// reaches and exits the boundary before we commit final clear.
+	totalSteps := len(ray) + len(path) - 1
+	frames := make([]ui.FireAnimOverlay, 0, totalSteps)
+	for step := 1; step <= totalSteps; step++ {
 		if len(cur) == 0 {
 			break
 		}
 		cur[0].R = bodyRune
-		next := ui.OverlayCell{X: ray[i].X, Y: ray[i].Y, R: headRune}
+		hx, hy := headPositionForStep(ray, dx, dy, step)
+		next := ui.OverlayCell{X: hx, Y: hy, R: headRune}
 		nxt := make([]ui.OverlayCell, 0, len(cur))
 		nxt = append(nxt, next)
 		if len(cur) > 1 {
@@ -519,6 +524,16 @@ func buildPointerFrames(b game.Board, path, ray []struct{ X, Y int }, headRune r
 		})
 	}
 	return frames, len(frames) > 0
+}
+
+func headPositionForStep(ray []struct{ X, Y int }, dx, dy, step int) (int, int) {
+	if step <= len(ray) {
+		p := ray[step-1]
+		return p.X, p.Y
+	}
+	last := ray[len(ray)-1]
+	extra := step - len(ray)
+	return last.X + extra*dx, last.Y + extra*dy
 }
 
 func straightBodyRune(d game.Direction) rune {
