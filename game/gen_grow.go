@@ -126,6 +126,16 @@ func tryGrowPartition(w, h, nHeads int, rng *rand.Rand) ([][]point, bool) {
 				pathSet[p] = struct{}{}
 			}
 			cands := neighborPoints(tail, prev, w, h, occupied, pathSet)
+			hx, hy := path[0].x, path[0].y
+			fire := oppositeDirGen(dirFromTo(hx, hy, path[1].x, path[1].y))
+			write := 0
+			for _, c := range cands {
+				if !cellOnOpenRayFromHead(hx, hy, fire, c.x, c.y, w, h) {
+					cands[write] = c
+					write++
+				}
+			}
+			cands = cands[:write]
 			if len(cands) == 0 {
 				continue
 			}

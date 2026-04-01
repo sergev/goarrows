@@ -354,6 +354,19 @@ func rayClearFromHead(hx, hy int, fire Direction, occupied []bool, w, h int) boo
 	return true
 }
 
+// cellOnOpenRayFromHead reports whether (px, py) lies on the open ray from (hx, hy) in
+// direction fire: the first cell is (hx, hy)+Delta(fire), excluding the head cell itself.
+// Matches RayEscapes ray traversal.
+func cellOnOpenRayFromHead(hx, hy int, fire Direction, px, py, w, h int) bool {
+	dx, dy := Delta(fire)
+	for cx, cy := hx+dx, hy+dy; cx >= 0 && cx < w && cy >= 0 && cy < h; cx, cy = cx+dx, cy+dy {
+		if cx == px && cy == py {
+			return true
+		}
+	}
+	return false
+}
+
 func neighborPoints(tail, prev point, w, h int, occupied []bool, pathSet map[point]struct{}) []point {
 	var out []point
 	for _, d := range []Direction{North, East, South, West} {

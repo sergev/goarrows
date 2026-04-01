@@ -29,6 +29,32 @@ func boardRunesEqual(a, b Board) bool {
 	return true
 }
 
+func TestCellOnOpenRayFromHead(t *testing.T) {
+	tests := []struct {
+		name       string
+		hx, hy     int
+		fire       Direction
+		px, py     int
+		w, h       int
+		wantOnRay bool
+	}{
+		{"first_cell_north", 2, 2, North, 2, 1, 5, 5, true},
+		{"second_cell_north", 2, 2, North, 2, 0, 5, 5, true},
+		{"head_not_counted", 2, 2, North, 2, 2, 5, 5, false},
+		{"off_ray_diagonal", 2, 2, North, 3, 1, 5, 5, false},
+		{"east_ray", 1, 1, East, 3, 1, 5, 5, true},
+		{"beyond_board_not_walked", 1, 1, East, 5, 1, 5, 5, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := cellOnOpenRayFromHead(tt.hx, tt.hy, tt.fire, tt.px, tt.py, tt.w, tt.h)
+			if got != tt.wantOnRay {
+				t.Fatalf("got %v, want %v", got, tt.wantOnRay)
+			}
+		})
+	}
+}
+
 func TestGenerateFullBoardValidateAndSolvable(t *testing.T) {
 	sizes := []int{3, 4, 5, 6}
 	if testing.Short() {
