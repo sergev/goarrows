@@ -27,24 +27,22 @@ After a win or game over, `n`, `p`, `r`, and `q` behave as indicated on the stat
 
 - `-lives N` — Starting lives per level (default `3`). Use `-1` for unlimited.
 - `-seed N` — Base seed for procedural level generation. **Omit** `-seed` to pick a random base seed from the system clock (each run differs). Pass `-seed N` for a reproducible sequence. For each level, generation uses `N`, then `N+1`, `N+2`, … (up to a fixed try limit) until a board is built, so a failing draw does not abort the game.
-- `-gen NAME` — Procedural generation algorithm (default `grow`). Values: `grow` (sparse multi-arrow growth with greedy-clear acceptance), `inverse` (full grid, reverse construction). Ignored when using `-level`.
-- `-level PATH` — Load a single level file instead of procedural levels. Levels are newline-separated rows of equal width; see `levels/data/*.txt` for examples.
 
 ## Procedural levels
 
-By default the game uses a **procedural pack**: level *k* (1-based in the HUD) is a **(k+2)×(k+2)** grid (level 1 → 3×3, then 4×4, 5×5, …). With **`-gen grow`** (default), the generator seeds `min(n,n)` small arrows and extends them at random until stuck; the board may have **empty cells**. A board is accepted only if at most **half** the arrow heads have a clear shot at the start (so it is not trivially easy), and if **greedy row-major clearing** (repeatedly fire the first head whose ray escapes) removes every arrow. With **`-gen inverse`**, the board is **fully tiled** using **reverse construction**: a randomized greedy walk that lays multiple polylines (turn-biased growth, optional small zig-zag templates), then **K horizontal bands** (K≥3), each band a random Hamiltonian snake—so typical boards have **three or more** arrowheads. **Playfulness heuristics** resample to avoid “exactly two long snakes” on medium/large grids; tiny boards and single-snake fallbacks skip the strictest checks. Generation is deterministic for a given base seed when you pass **`-seed`**. Levels are generated on demand and memoized per run.
+By default the game uses a **procedural pack**: level *k* (1-based in the HUD) is a **(k+2)×(k+2)** grid (level 1 → 3×3, then 4×4, 5×5, …). The grow generator seeds `min(n,n)` small arrows and extends them at random until stuck; the board may have **empty cells**. A board is accepted only if at most **half** the arrow heads have a clear shot at the start (so it is not trivially easy), and if **greedy row-major clearing** (repeatedly fire the first head whose ray escapes) removes every arrow. Generation is deterministic for a given base seed when you pass **`-seed`**. Levels are generated on demand and memoized per run.
 
 ## Project layout
 
 | Package | Role |
 |---------|------|
 | `main` | [tcell](https://github.com/gdamore/tcell) screen setup, input loop, HUD (level name, lives, cell count), status messages, and help overlay. |
-| `game` | Board model, parsing, validation, `PathFromHead`, `TryFire` / `RayEscapes`, procedural `GenerateBoard` (`GenInverse`, `GenGrow`, `ValidatePartialBoard`, `VerifyGreedyFirstClearsBoard`), `GenerateFullBoard`, and `VerifySolvable` (backtracking, for tests). |
-| `levels` | `NewProceduralPack(seed, algorithm)` / `Pack.LevelAt` for on-demand boards; `LoadFile` for `-level`; `LoadEmbedded` for tests and sample `.txt` under `levels/data/`. |
+| `game` | Board model, parsing, validation, `PathFromHead`, `TryFire` / `RayEscapes`, procedural `GenerateBoard` (`GenGrow`, `ValidatePartialBoard`, `VerifyGreedyFirstClearsBoard`), `GenerateFullBoard`, and `VerifySolvable` (backtracking, for tests). |
+| `levels` | `NewProceduralPack(seed)` / `Pack.LevelAt` for on-demand boards; tests build fixtures inline. |
 | `ui` | `DrawGrid` maps each logical cell to screen column `2*x` (height `y`), inserts `─` between neighbors when `game.HorizontalLink` is true so horizontal wires read as one continuous line; `GridSize` is `(2*w-1, h)`. |
 
 The game logic stays independent of the terminal: `TryFire` updates the board and lives; `main` only handles presentation and input.
 
 ## Status
 
-Playable TUI with procedural full-board levels and optional hand-authored `-level` files; sample grids remain under `levels/data/` for reference and tests.
+Playable TUI with procedural full-board levels.

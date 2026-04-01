@@ -2,12 +2,10 @@ package levels
 
 import (
 	"testing"
-
-	"goarrows/game"
 )
 
 func TestProceduralPackLevelAt(t *testing.T) {
-	p := NewProceduralPack(42, game.GenInverse)
+	p := NewProceduralPack(42)
 	b, name, err := p.LevelAt(0)
 	if err != nil {
 		t.Fatal(err)

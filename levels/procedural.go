@@ -21,16 +21,14 @@ type procMemo struct {
 }
 
 type proceduralSource struct {
-	seed      int64
-	algorithm string
-	memo      map[int]procMemo
+	seed int64
+	memo map[int]procMemo
 }
 
-func newProceduralSource(seed int64, algorithm string) *proceduralSource {
+func newProceduralSource(seed int64) *proceduralSource {
 	return &proceduralSource{
-		seed:      seed,
-		algorithm: algorithm,
-		memo:      make(map[int]procMemo),
+		seed: seed,
+		memo: make(map[int]procMemo),
 	}
 }
 
@@ -50,7 +48,7 @@ func (p *proceduralSource) levelAt(i int) (game.Board, string, error) {
 	var err error
 	for delta := int64(0); delta < proceduralGenMaxTries; delta++ {
 		rng := levelRNG(p.seed+delta, i)
-		b, err = game.GenerateBoard(n, n, rng, p.algorithm)
+		b, err = game.GenerateBoard(n, n, rng)
 		if err == nil {
 			p.memo[i] = procMemo{b: b, name: name}
 			return b, name, nil

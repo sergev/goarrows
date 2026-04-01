@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"goarrows/levels"
+)
 
 func TestResolveProceduralSeed_unsetUnderTest(t *testing.T) {
 	f := &optionalInt64Flag{}
@@ -16,5 +20,18 @@ func TestResolveProceduralSeed_explicit(t *testing.T) {
 	}
 	if got := resolveProceduralSeed(f); got != 42 {
 		t.Fatalf("got %d want 42", got)
+	}
+}
+
+func TestLoadPack_procedural(t *testing.T) {
+	p, err := loadPack(42)
+	if err != nil {
+		t.Fatalf("loadPack returned error: %v", err)
+	}
+	if p == nil {
+		t.Fatal("loadPack returned nil pack")
+	}
+	if got, want := p.Len(), levels.ProceduralLevelCount; got != want {
+		t.Fatalf("pack len=%d want %d", got, want)
 	}
 }

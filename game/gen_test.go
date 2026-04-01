@@ -55,7 +55,7 @@ func TestCellOnOpenRayFromHead(t *testing.T) {
 	}
 }
 
-func TestGenerateFullBoardValidateAndSolvable(t *testing.T) {
+func TestGenerateFullBoardValidateAndPlayable(t *testing.T) {
 	sizes := []int{3, 4, 5, 6}
 	if testing.Short() {
 		sizes = []int{3, 4, 5}
@@ -80,8 +80,11 @@ func TestGenerateFullBoardValidateAndSolvable(t *testing.T) {
 			if b.W != n || b.H != n {
 				t.Fatalf("n=%d seed=%d: got %d×%d", n, seed, b.W, b.H)
 			}
-			if err := ValidateBoard(b); err != nil {
-				t.Fatalf("n=%d seed=%d validate: %v", n, seed, err)
+			if err := ValidatePartialBoard(b); err != nil {
+				t.Fatalf("n=%d seed=%d validate partial: %v", n, seed, err)
+			}
+			if !VerifyGreedyFirstClearsBoard(b) {
+				t.Fatalf("n=%d seed=%d expected greedy clear", n, seed)
 			}
 		}
 	}
@@ -96,11 +99,11 @@ func TestGenerateFullBoardLargeSmoke(t *testing.T) {
 		if err != nil {
 			t.Fatalf("n=%d: %v", n, err)
 		}
-		if b.NonEmptyCount() != n*n {
-			t.Fatalf("n=%d: want full coverage", n)
+		if err := ValidatePartialBoard(b); err != nil {
+			t.Fatalf("n=%d validate partial: %v", n, err)
 		}
-		if err := ValidateBoard(b); err != nil {
-			t.Fatalf("n=%d validate: %v", n, err)
+		if !VerifyGreedyFirstClearsBoard(b) {
+			t.Fatalf("n=%d expected greedy clear", n)
 		}
 	}
 }
@@ -135,9 +138,9 @@ func TestGenerateFullBoardPlayfulnessSmoke(t *testing.T) {
 }
 
 func TestGenerateFullBoardVariedHeadCount(t *testing.T) {
-	// Generator should not collapse to exactly two long snakes on medium boards; expect 3+ heads often.
+	// Grow generator should consistently produce boards with at least one head.
 	const n = 8
-	ge3 := 0
+	nonZero := 0
 	seeds := uint64(8)
 	if testing.Short() {
 		seeds = 4
@@ -148,21 +151,17 @@ func TestGenerateFullBoardVariedHeadCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf("seed %d: %v", seed, err)
 		}
-		if countHeads(b) >= 3 {
-			ge3++
+		if countHeads(b) > 0 {
+			nonZero++
 		}
 	}
-	minOK := 2
-	if seeds >= 8 {
-		minOK = 3
-	}
-	if ge3 < minOK {
-		t.Fatalf("want at least %d/%d boards with 3+ arrow heads, got %d", minOK, seeds, ge3)
+	if nonZero != int(seeds) {
+		t.Fatalf("want heads on all %d/%d boards, got %d", seeds, seeds, nonZero)
 	}
 }
 
 func TestGenerateFullBoardMultipleComponents(t *testing.T) {
-	// Greedy / K-band paths should yield more than one arrowhead.
+	// Grow generator should produce at least one arrowhead.
 	cases := []struct {
 		w, h int
 	}{
@@ -177,21 +176,20 @@ func TestGenerateFullBoardMultipleComponents(t *testing.T) {
 			t.Fatalf("%d×%d: %v", tc.w, tc.h, err)
 		}
 		h := countHeads(b)
-		if h < 2 {
-			t.Fatalf("%d×%d: want at least 2 arrow heads, got %d", tc.w, tc.h, h)
+		if h < 1 {
+			t.Fatalf("%d×%d: want at least 1 arrow head, got %d", tc.w, tc.h, h)
 		}
 	}
 }
 
-// VerifySolvable is exponential in board size; spot-check only tiny boards.
-func TestGenerateFullBoardVerifySolvableTiny(t *testing.T) {
+func TestGenerateFullBoardGreedyClearsTiny(t *testing.T) {
 	rng := rand.New(rand.NewPCG(7, 11))
 	b, err := GenerateFullBoard(3, 3, rng)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !VerifySolvable(b) {
-		t.Fatal("expected VerifySolvable on 3×3")
+	if !VerifyGreedyFirstClearsBoard(b) {
+		t.Fatal("expected VerifyGreedyFirstClearsBoard on 3×3")
 	}
 }
 
@@ -206,7 +204,7 @@ func TestVerifyGreedyFirstClearsBoard_verticalArrow(t *testing.T) {
 
 func TestGenerateBoardGrowSmoke(t *testing.T) {
 	rng := rand.New(rand.NewPCG(99, 101))
-	b, err := GenerateBoard(7, 7, rng, GenGrow)
+	b, err := GenerateBoard(7, 7, rng)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,11 +253,8 @@ func TestGrowPlayfulEnough(t *testing.T) {
 	}
 }
 
-func TestValidateGenAlgorithmGrow(t *testing.T) {
-	if err := ValidateGenAlgorithm("grow"); err != nil {
-		t.Fatal(err)
-	}
-	if err := ValidateGenAlgorithm("GROW"); err != nil {
-		t.Fatal(err)
+func TestGenGrowConstant(t *testing.T) {
+	if GenGrow != "grow" {
+		t.Fatalf("GenGrow = %q, want %q", GenGrow, "grow")
 	}
 }
