@@ -15,16 +15,10 @@ import (
 	"goarrows/ui"
 )
 
-// fireOverlay is a centered modal after a fire outcome (win or game over).
-type fireOverlay struct {
-	positive bool
-	lines    []string
-}
-
 // fireUIResult combines an optional status line (e.g. Blocked) with an optional modal.
 type fireUIResult struct {
 	status  string
-	overlay *fireOverlay
+	overlay *ui.ModalOverlay
 }
 
 type animState struct {
@@ -110,7 +104,7 @@ func main() {
 
 	showHelp := false
 	status := ""
-	var modal *fireOverlay
+	var modal *ui.ModalOverlay
 	generatingN := 0
 	var anim animState
 	animStep := 75 * time.Millisecond
@@ -143,12 +137,12 @@ func main() {
 		if lineY >= sh {
 			lineY = sh - 1
 		}
-		drawStr(s, 0, lineY, sw, fmt.Sprintf(" %s", g.LevelName), titleSt)
+		ui.DrawStr(s, 0, lineY, sw, fmt.Sprintf(" %s", g.LevelName), titleSt)
 		lineY++
 		if lineY < sh {
-			livesStr := formatLives(g.Lives, *startLives)
+			livesStr := ui.FormatLives(g.Lives, *startLives)
 			left := fmt.Sprintf(" Lives: %s   Cells: %d", livesStr, g.Board.NonEmptyCount())
-			drawStr(s, 0, lineY, sw, left, msgSt)
+			ui.DrawStr(s, 0, lineY, sw, left, msgSt)
 		}
 		lineY++
 		if lineY < sh && status != "" {
@@ -158,21 +152,21 @@ func main() {
 			} else if strings.HasPrefix(status, "Cleared") {
 				st = winSt
 			}
-			drawStr(s, 0, lineY, sw, " "+status, st)
+			ui.DrawStr(s, 0, lineY, sw, " "+status, st)
 		}
 		lineY++
 		if lineY < sh {
-			drawStr(s, 0, lineY, sw, " hjkl/←↑↓→ move  space/enter fire  r restart  n/p level  ? help  q quit", helpSt)
+			ui.DrawStr(s, 0, lineY, sw, " hjkl/←↑↓→ move  space/enter fire  r restart  n/p level  ? help  q quit", helpSt)
 		}
 
 		if showHelp {
-			drawHelpOverlay(s, sw, sh, base)
+			ui.DrawHelpOverlay(s, sw, sh, base)
 		}
 		if modal != nil {
-			drawFireOverlay(s, sw, sh, modal, def)
+			ui.DrawModalOverlay(s, sw, sh, modal, def)
 		}
 		if generatingN > 0 {
-			drawGeneratingOverlay(s, sw, sh, generatingN, def)
+			ui.DrawGeneratingOverlay(s, sw, sh, generatingN, def)
 		}
 		s.Show()
 	}
@@ -397,9 +391,9 @@ func applyFire(g *game.Game, cx, cy, startLives int) fireUIResult {
 	case game.FireCleared:
 		if g.Won() {
 			return fireUIResult{
-				overlay: &fireOverlay{
-					positive: true,
-					lines: []string{
+				overlay: &ui.ModalOverlay{
+					Positive: true,
+					Lines: []string{
 						"You win!",
 						"",
 						"Press Enter for next level",
@@ -413,9 +407,9 @@ func applyFire(g *game.Game, cx, cy, startLives int) fireUIResult {
 	case game.FireBlocked:
 		if g.Lost() {
 			return fireUIResult{
-				overlay: &fireOverlay{
-					positive: false,
-					lines: []string{
+				overlay: &ui.ModalOverlay{
+					Positive: false,
+					Lines: []string{
 						"Game over",
 						"",
 						"r restart  q quit",
@@ -533,181 +527,3 @@ func fireTravelCells(b game.Board, cx, cy int) []struct{ X, Y int } {
 	return out
 }
 
-func formatLives(n, start int) string {
-	if start < 0 {
-		return "∞"
-	}
-	return fmt.Sprintf("%d", n)
-}
-
-func drawStr(s tcell.Screen, x0, y, maxW int, text string, st tcell.Style) {
-	col := x0
-	for _, r := range text {
-		if col >= maxW {
-			break
-		}
-		s.SetContent(col, y, r, nil, st)
-		col++
-	}
-}
-
-func drawGeneratingOverlay(s tcell.Screen, sw, sh, n int, fill tcell.Style) {
-	if n <= 0 {
-		return
-	}
-	lines := []string{fmt.Sprintf(" Creating Level %d×%d... ", n, n)}
-	boxW := 0
-	for _, ln := range lines {
-		if len([]rune(ln)) > boxW {
-			boxW = len([]rune(ln))
-		}
-	}
-	boxW += 4
-	boxH := len(lines) + 4
-	ox := (sw - boxW) / 2
-	oy := (sh - boxH) / 2
-	if ox < 0 {
-		ox = 0
-	}
-	if oy < 0 {
-		oy = 0
-	}
-	st := fill.Foreground(tcell.ColorWhite).Background(tcell.ColorNavy)
-	for j := 0; j < boxH; j++ {
-		for i := 0; i < boxW && i < sw; i++ {
-			x, y := ox+i, oy+j
-			if x < 0 || y < 0 || y >= sh {
-				continue
-			}
-			var r rune = ' '
-			if j == 0 && i == 0 {
-				r = '┌'
-			} else if j == 0 && i == boxW-1 {
-				r = '┐'
-			} else if j == boxH-1 && i == 0 {
-				r = '└'
-			} else if j == boxH-1 && i == boxW-1 {
-				r = '┘'
-			} else if j == 0 || j == boxH-1 {
-				r = '─'
-			} else if i == 0 || i == boxW-1 {
-				r = '│'
-			}
-			s.SetContent(x, y, r, nil, st)
-		}
-	}
-	for li, ln := range lines {
-		drawStr(s, ox+2, oy+2+li, ox+boxW-1, ln, st)
-	}
-}
-
-func drawHelpOverlay(s tcell.Screen, sw, sh int, fill tcell.Style) {
-	lines := []string{
-		" Arrows — TUI puzzle",
-		"",
-		" Fire an arrow (space/enter) to slide it off the board",
-		" along its direction if the path is empty. If another",
-		" arrow blocks the path, you lose a life.",
-		"",
-		" Win by clearing all arrows. Lose if lives hit 0.",
-		"",
-		" Any key closes this help.",
-	}
-	boxW := 0
-	for _, ln := range lines {
-		if len([]rune(ln)) > boxW {
-			boxW = len([]rune(ln))
-		}
-	}
-	boxW += 4
-	boxH := len(lines) + 4
-	ox := (sw - boxW) / 2
-	oy := (sh - boxH) / 2
-	if ox < 0 {
-		ox = 0
-	}
-	if oy < 0 {
-		oy = 0
-	}
-	st := fill.Foreground(tcell.ColorWhite).Background(tcell.ColorNavy)
-	for j := 0; j < boxH; j++ {
-		for i := 0; i < boxW && i < sw; i++ {
-			x, y := ox+i, oy+j
-			if x < 0 || y < 0 || y >= sh {
-				continue
-			}
-			var r rune = ' '
-			if j == 0 && i == 0 {
-				r = '┌'
-			} else if j == 0 && i == boxW-1 {
-				r = '┐'
-			} else if j == boxH-1 && i == 0 {
-				r = '└'
-			} else if j == boxH-1 && i == boxW-1 {
-				r = '┘'
-			} else if j == 0 || j == boxH-1 {
-				r = '─'
-			} else if i == 0 || i == boxW-1 {
-				r = '│'
-			}
-			s.SetContent(x, y, r, nil, st)
-		}
-	}
-	for li, ln := range lines {
-		drawStr(s, ox+2, oy+2+li, ox+boxW-1, ln, st)
-	}
-}
-
-func drawFireOverlay(s tcell.Screen, sw, sh int, o *fireOverlay, fill tcell.Style) {
-	if o == nil || len(o.lines) == 0 {
-		return
-	}
-	bg := tcell.ColorDarkOliveGreen
-	if !o.positive {
-		bg = tcell.ColorDarkRed
-	}
-	st := fill.Foreground(tcell.ColorWhite).Background(bg)
-	lines := o.lines
-	boxW := 0
-	for _, ln := range lines {
-		if w := len([]rune(ln)); w > boxW {
-			boxW = w
-		}
-	}
-	boxW += 4
-	boxH := len(lines) + 4
-	ox := (sw - boxW) / 2
-	oy := (sh - boxH) / 2
-	if ox < 0 {
-		ox = 0
-	}
-	if oy < 0 {
-		oy = 0
-	}
-	for j := 0; j < boxH; j++ {
-		for i := 0; i < boxW && i < sw; i++ {
-			x, y := ox+i, oy+j
-			if x < 0 || y < 0 || y >= sh {
-				continue
-			}
-			var r rune = ' '
-			if j == 0 && i == 0 {
-				r = '┌'
-			} else if j == 0 && i == boxW-1 {
-				r = '┐'
-			} else if j == boxH-1 && i == 0 {
-				r = '└'
-			} else if j == boxH-1 && i == boxW-1 {
-				r = '┘'
-			} else if j == 0 || j == boxH-1 {
-				r = '─'
-			} else if i == 0 || i == boxW-1 {
-				r = '│'
-			}
-			s.SetContent(x, y, r, nil, st)
-		}
-	}
-	for li, ln := range lines {
-		drawStr(s, ox+2, oy+2+li, ox+boxW-1, ln, st)
-	}
-}
