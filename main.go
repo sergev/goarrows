@@ -121,8 +121,6 @@ func main() {
 	generatingN := 0
 	var anim animState
 	animStep := 75 * time.Millisecond
-	type fireReq struct{ x, y int }
-	fireQueue := make([]fireReq, 0, 8)
 
 	idx := 0
 	var g *game.Game
@@ -185,12 +183,6 @@ func main() {
 		}
 		s.Show()
 	}
-	clearFireQueue := func() {
-		fireQueue = fireQueue[:0]
-	}
-	enqueueFire := func(x, y int) {
-		fireQueue = append(fireQueue, fireReq{x: x, y: y})
-	}
 	tryStartOrApplyFire := func(x, y int) {
 		started := tryStartFireAnimation(g, x, y, &anim, animStep)
 		if !started {
@@ -198,12 +190,16 @@ func main() {
 			status, modal = fr.status, fr.overlay
 		}
 	}
-	tryStartNextQueuedFire := func() {
-		for !anim.active && len(fireQueue) > 0 && !g.Won() && !g.Lost() {
-			req := fireQueue[0]
-			fireQueue = fireQueue[1:]
-			tryStartOrApplyFire(req.x, req.y)
+	interruptAndFire := func(x, y int) {
+		if anim.active {
+			fr := applyFire(g, anim.fireX, anim.fireY, *startLives)
+			status, modal = fr.status, fr.overlay
+			anim.active = false
 		}
+		if g.Won() || g.Lost() {
+			return
+		}
+		tryStartOrApplyFire(x, y)
 	}
 
 	g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
@@ -234,7 +230,6 @@ func main() {
 				anim.active = false
 				fr := applyFire(g, anim.fireX, anim.fireY, *startLives)
 				status, modal = fr.status, fr.overlay
-				tryStartNextQueuedFire()
 			}
 			redraw()
 		case *tcell.EventKey:
@@ -253,7 +248,6 @@ func main() {
 						g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
 						status, modal = "", nil
 						anim.active = false
-						clearFireQueue()
 						clampCursor(g, &cx, &cy)
 					}
 				case tcell.KeyRune:
@@ -264,21 +258,18 @@ func main() {
 						resetLevel(pack, &g, idx, *startLives)
 						status, modal = "", nil
 						anim.active = false
-						clearFireQueue()
 						clampCursor(g, &cx, &cy)
 					case 'n', 'N':
 						idx = (idx + 1) % pack.Len()
 						g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
 						status, modal = "", nil
 						anim.active = false
-						clearFireQueue()
 						clampCursor(g, &cx, &cy)
 					case 'p', 'P':
 						idx = (idx - 1 + pack.Len()) % pack.Len()
 						g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
 						status, modal = "", nil
 						anim.active = false
-						clearFireQueue()
 						clampCursor(g, &cx, &cy)
 					}
 				}
@@ -298,11 +289,7 @@ func main() {
 			case tcell.KeyRight:
 				moveCursor(g, &cx, &cy, 1, 0)
 			case tcell.KeyEnter:
-				if anim.active {
-					enqueueFire(cx, cy)
-				} else {
-					tryStartOrApplyFire(cx, cy)
-				}
+				interruptAndFire(cx, cy)
 			case tcell.KeyRune:
 				switch r := ev.Rune(); r {
 				case 'q', 'Q':
@@ -316,29 +303,22 @@ func main() {
 				case 'j':
 					moveCursor(g, &cx, &cy, 0, 1)
 				case ' ', 'f', 'F':
-					if anim.active {
-						enqueueFire(cx, cy)
-					} else {
-						tryStartOrApplyFire(cx, cy)
-					}
+					interruptAndFire(cx, cy)
 				case 'r', 'R':
 					resetLevel(pack, &g, idx, *startLives)
 					status, modal = "", nil
 					anim.active = false
-					clearFireQueue()
 				case 'n', 'N':
 					idx = (idx + 1) % pack.Len()
 					g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
 					status, modal = "", nil
 					anim.active = false
-					clearFireQueue()
 					clampCursor(g, &cx, &cy)
 				case 'p', 'P':
 					idx = (idx - 1 + pack.Len()) % pack.Len()
 					g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
 					status, modal = "", nil
 					anim.active = false
-					clearFireQueue()
 					clampCursor(g, &cx, &cy)
 				case '?':
 					showHelp = true
