@@ -26,23 +26,23 @@ After a win or game over, `n`, `p`, `r`, and `q` behave as indicated on the stat
 ## Flags
 
 - `-lives N` — Starting lives per level (default `3`). Use `-1` for unlimited.
-- `-seed N` — Base seed for procedural level generation. **Omit** `-seed` to pick a random base seed from the system clock (each run differs). Pass `-seed N` for a reproducible sequence. For each level, generation uses `N`, then `N+1`, `N+2`, … (up to a fixed try limit) until a board is built, so a failing draw does not abort the game.
+- `-seed N` — Base seed for generated levels. **Omit** `-seed` to pick a random base seed from the system clock (each run differs). Pass `-seed N` for a reproducible sequence. For each level, generation uses `N`, then `N+1`, `N+2`, … (up to a fixed try limit) until a board is built, so a failing draw does not abort the game.
 
-## Procedural levels
+## Generated levels
 
-By default the game uses a **procedural pack**: level *k* (1-based in the HUD) is a **(k+2)×(k+2)** grid (level 1 → 3×3, then 4×4, 5×5, …). The grow generator seeds `min(n,n)` small arrows and extends them at random until stuck; the board may have **empty cells**. A board is accepted only if at most **half** the arrow heads have a clear shot at the start (so it is not trivially easy), and if **greedy row-major clearing** (repeatedly fire the first head whose ray escapes) removes every arrow. Generation is deterministic for a given base seed when you pass **`-seed`**. Levels are generated on demand and memoized per run.
+By default the game builds levels automatically as you play: level *k* (1-based in the HUD) is a **(k+2)×(k+2)** grid (level 1 → 3×3, then 4×4, 5×5, …). The grow generator seeds `min(n,n)` small arrows and extends them at random until stuck; the board may have **empty cells**. A board is accepted only if at most **half** the arrow heads have a clear shot at the start (so it is not trivially easy), and if **greedy row-major clearing** (repeatedly fire the first head whose ray escapes) removes every arrow. Generation is deterministic for a given base seed when you pass **`-seed`**. Levels are built on demand and cached for the current run.
 
 ## Project layout
 
 | Package | Role |
 |---------|------|
 | `main` | [tcell](https://github.com/gdamore/tcell) screen setup, input loop, HUD (level name, lives, cell count), status messages, and help overlay. |
-| `game` | Board model, parsing, validation, `PathFromHead`, `TryFire` / `RayEscapes`, procedural `GenerateBoard` (`GenGrow`, `ValidatePartialBoard`, `VerifyGreedyFirstClearsBoard`), `GenerateFullBoard`, and `VerifySolvable` (backtracking, for tests). |
-| `levels` | `NewProceduralPack(seed)` / `Pack.LevelAt` for on-demand boards; tests build fixtures inline. |
+| `game` | Board model, parsing, validation, `PathFromHead`, `TryFire` / `RayEscapes`, level-generation `GenerateBoard` (`GenGrow`, `ValidatePartialBoard`, `VerifyGreedyFirstClearsBoard`), `GenerateFullBoard`, and `VerifySolvable` (backtracking, for tests). |
+| `levels` | `NewProceduralPack(seed)` / `Pack.LevelAt` for on-demand generated boards; tests build fixtures inline. |
 | `ui` | `DrawGrid` maps each logical cell to screen column `2*x` (height `y`), inserts `─` between neighbors when `game.HorizontalLink` is true so horizontal wires read as one continuous line; `GridSize` is `(2*w-1, h)`. |
 
 The game logic stays independent of the terminal: `TryFire` updates the board and lives; `main` only handles presentation and input.
 
 ## Status
 
-Playable TUI with procedural full-board levels.
+Playable TUI with automatically generated full-board levels.
