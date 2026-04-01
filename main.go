@@ -27,6 +27,16 @@ type fireUIResult struct {
 	overlay *fireOverlay
 }
 
+type animState struct {
+	active   bool
+	hidePath []struct{ X, Y int } // original fired path (masked during animation)
+	frames   []ui.FireAnimOverlay // precomputed snake frames
+	step     int
+	nextStep time.Time
+	fireX    int
+	fireY    int
+}
+
 // optionalInt64Flag is a flag.Value for -seed: unset means "not provided on CLI".
 type optionalInt64Flag struct {
 	set   bool
@@ -109,6 +119,8 @@ func main() {
 	status := ""
 	var modal *fireOverlay
 	generatingN := 0
+	var anim animState
+	animStep := 75 * time.Millisecond
 
 	idx := 0
 	var g *game.Game
@@ -128,7 +140,11 @@ func main() {
 			ox = 0
 		}
 
-		ui.DrawGrid(s, ox, oy, g.Board, cx, cy, base, cursorSt)
+		var fireAnim *ui.FireAnimOverlay
+		if anim.active && anim.step < len(anim.frames) {
+			fireAnim = &anim.frames[anim.step]
+		}
+		ui.DrawGrid(s, ox, oy, g.Board, cx, cy, base, cursorSt, fireAnim)
 
 		lineY := oy + gh + 1
 		if lineY >= sh {
@@ -171,6 +187,13 @@ func main() {
 	g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
 	clampCursor(g, &cx, &cy)
 	redraw()
+	ticker := time.NewTicker(16 * time.Millisecond)
+	defer ticker.Stop()
+	go func() {
+		for range ticker.C {
+			s.PostEvent(tcell.NewEventInterrupt(nil))
+		}
+	}()
 
 	quit := false
 	for !quit {
@@ -179,9 +202,36 @@ func main() {
 		case *tcell.EventResize:
 			s.Sync()
 			redraw()
+		case *tcell.EventInterrupt:
+			if !anim.active || time.Now().Before(anim.nextStep) {
+				continue
+			}
+			anim.step++
+			anim.nextStep = time.Now().Add(animStep)
+			if anim.step >= len(anim.frames) {
+				anim.active = false
+				fr := applyFire(g, anim.fireX, anim.fireY, *startLives)
+				status, modal = fr.status, fr.overlay
+			}
+			redraw()
 		case *tcell.EventKey:
 			if showHelp {
 				showHelp = false
+				redraw()
+				continue
+			}
+			if anim.active {
+				switch ev.Key() {
+				case tcell.KeyCtrlC, tcell.KeyEscape:
+					quit = true
+				case tcell.KeyRune:
+					if r := ev.Rune(); r == 'q' || r == 'Q' {
+						quit = true
+					}
+				}
+				if quit {
+					continue
+				}
 				redraw()
 				continue
 			}
@@ -194,6 +244,7 @@ func main() {
 						idx = (idx + 1) % pack.Len()
 						g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
 						status, modal = "", nil
+						anim.active = false
 						clampCursor(g, &cx, &cy)
 					}
 				case tcell.KeyRune:
@@ -203,16 +254,19 @@ func main() {
 					case 'r', 'R':
 						resetLevel(pack, &g, idx, *startLives)
 						status, modal = "", nil
+						anim.active = false
 						clampCursor(g, &cx, &cy)
 					case 'n', 'N':
 						idx = (idx + 1) % pack.Len()
 						g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
 						status, modal = "", nil
+						anim.active = false
 						clampCursor(g, &cx, &cy)
 					case 'p', 'P':
 						idx = (idx - 1 + pack.Len()) % pack.Len()
 						g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
 						status, modal = "", nil
+						anim.active = false
 						clampCursor(g, &cx, &cy)
 					}
 				}
@@ -232,8 +286,11 @@ func main() {
 			case tcell.KeyRight:
 				moveCursor(g, &cx, &cy, 1, 0)
 			case tcell.KeyEnter:
-				fr := applyFire(g, cx, cy, *startLives)
-				status, modal = fr.status, fr.overlay
+				started := tryStartFireAnimation(g, cx, cy, &anim, animStep)
+				if !started {
+					fr := applyFire(g, cx, cy, *startLives)
+					status, modal = fr.status, fr.overlay
+				}
 			case tcell.KeyRune:
 				switch r := ev.Rune(); r {
 				case 'q', 'Q':
@@ -247,20 +304,26 @@ func main() {
 				case 'j':
 					moveCursor(g, &cx, &cy, 0, 1)
 				case ' ', 'f', 'F':
-					fr := applyFire(g, cx, cy, *startLives)
-					status, modal = fr.status, fr.overlay
+					started := tryStartFireAnimation(g, cx, cy, &anim, animStep)
+					if !started {
+						fr := applyFire(g, cx, cy, *startLives)
+						status, modal = fr.status, fr.overlay
+					}
 				case 'r', 'R':
 					resetLevel(pack, &g, idx, *startLives)
 					status, modal = "", nil
+					anim.active = false
 				case 'n', 'N':
 					idx = (idx + 1) % pack.Len()
 					g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
 					status, modal = "", nil
+					anim.active = false
 					clampCursor(g, &cx, &cy)
 				case 'p', 'P':
 					idx = (idx - 1 + pack.Len()) % pack.Len()
 					g = newGameWithGenOverlay(pack, idx, *startLives, &generatingN, redraw)
 					status, modal = "", nil
+					anim.active = false
 					clampCursor(g, &cx, &cy)
 				case '?':
 					showHelp = true
@@ -390,6 +453,95 @@ func applyFire(g *game.Game, cx, cy, startLives int) fireUIResult {
 	default:
 		return fireUIResult{}
 	}
+}
+
+func tryStartFireAnimation(g *game.Game, cx, cy int, anim *animState, stepDur time.Duration) bool {
+	if g.Won() || g.Lost() || !g.Board.InBounds(cx, cy) {
+		return false
+	}
+	c := g.Board.At(cx, cy)
+	if c.IsEmpty() || !c.IsHead() || !game.RayEscapes(g.Board, cx, cy) {
+		return false
+	}
+	path, err := game.PathFromHead(g.Board, cx, cy)
+	if err != nil || len(path) == 0 {
+		return false
+	}
+	cells := fireTravelCells(g.Board, cx, cy)
+	if len(cells) == 0 {
+		return false
+	}
+	frames, ok := buildPointerFrames(g.Board, path, cells, c.R)
+	if !ok || len(frames) == 0 {
+		return false
+	}
+	anim.active = true
+	anim.hidePath = path
+	anim.frames = frames
+	anim.step = 0
+	anim.nextStep = time.Now().Add(stepDur)
+	anim.fireX = cx
+	anim.fireY = cy
+	return true
+}
+
+func buildPointerFrames(b game.Board, path, ray []struct{ X, Y int }, headRune rune) ([]ui.FireAnimOverlay, bool) {
+	if len(path) == 0 || len(ray) == 0 {
+		return nil, false
+	}
+	fireDir, ok := game.HeadFireDir(headRune)
+	if !ok {
+		return nil, false
+	}
+	bodyRune := straightBodyRune(fireDir)
+	cur := make([]ui.OverlayCell, len(path))
+	for i, p := range path {
+		cur[i] = ui.OverlayCell{X: p.X, Y: p.Y, R: b.At(p.X, p.Y).R}
+	}
+	frames := make([]ui.FireAnimOverlay, 0, len(ray))
+	for i := 0; i < len(ray); i++ {
+		if len(cur) == 0 {
+			break
+		}
+		cur[0].R = bodyRune
+		next := ui.OverlayCell{X: ray[i].X, Y: ray[i].Y, R: headRune}
+		nxt := make([]ui.OverlayCell, 0, len(cur))
+		nxt = append(nxt, next)
+		if len(cur) > 1 {
+			nxt = append(nxt, cur[:len(cur)-1]...)
+		}
+		cur = nxt
+		frameCells := make([]ui.OverlayCell, len(cur))
+		copy(frameCells, cur)
+		frames = append(frames, ui.FireAnimOverlay{
+			HidePath: path,
+			Cells:    frameCells,
+		})
+	}
+	return frames, len(frames) > 0
+}
+
+func straightBodyRune(d game.Direction) rune {
+	switch d {
+	case game.North, game.South:
+		return '│'
+	default:
+		return '─'
+	}
+}
+
+func fireTravelCells(b game.Board, cx, cy int) []struct{ X, Y int } {
+	c := b.At(cx, cy)
+	fire, ok := game.HeadFireDir(c.R)
+	if !ok {
+		return nil
+	}
+	dx, dy := game.Delta(fire)
+	var out []struct{ X, Y int }
+	for x, y := cx+dx, cy+dy; b.InBounds(x, y); x, y = x+dx, y+dy {
+		out = append(out, struct{ X, Y int }{X: x, Y: y})
+	}
+	return out
 }
 
 func formatLives(n, start int) string {
