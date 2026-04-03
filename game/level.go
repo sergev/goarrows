@@ -37,6 +37,7 @@ func ParseLevel(lines []string) (Board, error) {
 	return b, nil
 }
 
+// parseCellRune maps one ASCII/Unicode puzzle character to a Cell (empty, wire, or normalized head).
 func parseCellRune(r rune) (Cell, error) {
 	switch r {
 	case '.', ' ':
@@ -50,6 +51,7 @@ func parseCellRune(r rune) (Cell, error) {
 	}
 }
 
+// normalizeHeadRune maps ASCII arrow heads to the Unicode heads used internally.
 func normalizeHeadRune(r rune) rune {
 	switch r {
 	case '^':

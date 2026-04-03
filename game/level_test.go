@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// TestValidateBoard_mismatchedNeighbor rejects a head wired to an incompatible neighbor.
 func TestValidateBoard_mismatchedNeighbor(t *testing.T) {
 	// ▲ with no body link (│ below has no north to ▲ if we use wrong glyph)
 	b := NewBoard(1, 2)
@@ -16,6 +17,7 @@ func TestValidateBoard_mismatchedNeighbor(t *testing.T) {
 	}
 }
 
+// TestValidateBoard_emptyRejected rejects full-validation boards that contain empty cells.
 func TestValidateBoard_emptyRejected(t *testing.T) {
 	b := NewBoard(1, 1)
 	b.Set(0, 0, Cell{R: '▲'})
@@ -29,6 +31,7 @@ func TestValidateBoard_emptyRejected(t *testing.T) {
 	}
 }
 
+// TestValidateBoard_twoHeadsOneComponent rejects two heads in one connected component.
 func TestValidateBoard_twoHeadsOneComponent(t *testing.T) {
 	// two heads adjacent without proper separation - invalid graph
 	b := NewBoard(2, 1)
@@ -40,6 +43,7 @@ func TestValidateBoard_twoHeadsOneComponent(t *testing.T) {
 	}
 }
 
+// TestValidatePartialBoard_okSparseArrow accepts a small arrow with background empties.
 func TestValidatePartialBoard_okSparseArrow(t *testing.T) {
 	// ▲ at (0,0), │ below — rest empty
 	b := NewBoard(2, 2)
@@ -50,6 +54,7 @@ func TestValidatePartialBoard_okSparseArrow(t *testing.T) {
 	}
 }
 
+// TestValidatePartialBoard_noCells rejects a board with no arrow cells.
 func TestValidatePartialBoard_noCells(t *testing.T) {
 	b := NewBoard(2, 2)
 	if err := ValidatePartialBoard(b); err == nil {
@@ -57,6 +62,7 @@ func TestValidatePartialBoard_noCells(t *testing.T) {
 	}
 }
 
+// TestValidatePartialBoard_twoHeadsOneComponent rejects two heads sharing one component on partial boards.
 func TestValidatePartialBoard_twoHeadsOneComponent(t *testing.T) {
 	b := NewBoard(2, 1)
 	b.Set(0, 0, Cell{R: '▶'})

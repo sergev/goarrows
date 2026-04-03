@@ -25,6 +25,7 @@ func boardFromLinesNoValidate(lines []string) Board {
 	return b
 }
 
+// TestRayEscapes_headOnly checks RayEscapes on a head vs wire on a minimal valid level.
 func TestRayEscapes_headOnly(t *testing.T) {
 	b, err := ParseLevelString("▲\n│")
 	if err != nil {
@@ -38,6 +39,7 @@ func TestRayEscapes_headOnly(t *testing.T) {
 	}
 }
 
+// TestRayEscapes_blocked uses a non-valid layout to assert blocked vs open rays.
 func TestRayEscapes_blocked(t *testing.T) {
 	// Left snake vertical; right column head at bottom fires north into │.
 	b := boardFromLinesNoValidate([]string{"▲│", "│▲"})
@@ -49,6 +51,7 @@ func TestRayEscapes_blocked(t *testing.T) {
 	}
 }
 
+// TestTryFire_wireNoOp ensures firing a non-head cell is a no-op.
 func TestTryFire_wireNoOp(t *testing.T) {
 	b, err := ParseLevelString("▲\n│")
 	if err != nil {
@@ -63,6 +66,7 @@ func TestTryFire_wireNoOp(t *testing.T) {
 	}
 }
 
+// TestTryFire_clearsFullPath clears a vertical arrow and wins.
 func TestTryFire_clearsFullPath(t *testing.T) {
 	b, err := ParseLevelString("▲\n│")
 	if err != nil {
@@ -77,6 +81,7 @@ func TestTryFire_clearsFullPath(t *testing.T) {
 	}
 }
 
+// TestTryFire_blockedLosesLife checks FireBlocked decrements lives and leaves the board intact.
 func TestTryFire_blockedLosesLife(t *testing.T) {
 	b := boardFromLinesNoValidate([]string{"▲│", "│▲"})
 	g := NewGame(b, 2, "t")
@@ -88,6 +93,7 @@ func TestTryFire_blockedLosesLife(t *testing.T) {
 	}
 }
 
+// TestTryFire_horizontalClearsAll clears a single horizontal polyline in one shot.
 func TestTryFire_horizontalClearsAll(t *testing.T) {
 	b, err := ParseLevelString("──▶")
 	if err != nil {
@@ -102,6 +108,7 @@ func TestTryFire_horizontalClearsAll(t *testing.T) {
 	}
 }
 
+// TestLost checks Lost after a blocked shot consumes the last life.
 func TestLost(t *testing.T) {
 	b := boardFromLinesNoValidate([]string{"▲│", "│▲"})
 	g := NewGame(b, 1, "t")
@@ -111,6 +118,7 @@ func TestLost(t *testing.T) {
 	}
 }
 
+// TestParseLevel_asciiHeads verifies ASCII head runes normalize to Unicode in ParseLevelString.
 func TestParseLevel_asciiHeads(t *testing.T) {
 	b, err := ParseLevelString("^\n│")
 	if err != nil {

@@ -32,6 +32,7 @@ func VerifySolvable(b Board) bool {
 	return verifySolvableRec(g)
 }
 
+// verifySolvableRec explores firing sequences via depth-first search (mutates cloned games).
 func verifySolvableRec(g *Game) bool {
 	if g.Won() {
 		return true

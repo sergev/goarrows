@@ -15,6 +15,7 @@ type Cell struct {
 	R rune
 }
 
+// IsEmpty reports whether the cell has no glyph (R == 0).
 func (c Cell) IsEmpty() bool {
 	return c.R == 0
 }
@@ -25,22 +26,27 @@ type Board struct {
 	Data []Cell
 }
 
+// NewBoard allocates an empty w×h board (all cells empty).
 func NewBoard(w, h int) Board {
 	return Board{W: w, H: h, Data: make([]Cell, w*h)}
 }
 
+// InBounds reports whether (x, y) is a valid index in row-major order.
 func (b Board) InBounds(x, y int) bool {
 	return x >= 0 && x < b.W && y >= 0 && y < b.H
 }
 
+// At returns the cell at (x, y); callers should use InBounds first for safety.
 func (b Board) At(x, y int) Cell {
 	return b.Data[y*b.W+x]
 }
 
+// Set writes cell c at (x, y).
 func (b *Board) Set(x, y int, c Cell) {
 	b.Data[y*b.W+x] = c
 }
 
+// Clone returns a deep copy of the board grid.
 func (b Board) Clone() Board {
 	cp := NewBoard(b.W, b.H)
 	copy(cp.Data, b.Data)
@@ -58,6 +64,7 @@ func (b Board) NonEmptyCount() int {
 	return n
 }
 
+// Delta maps a cardinal direction to grid deltas (x increases east, y increases south).
 func Delta(d Direction) (dx, dy int) {
 	switch d {
 	case North:

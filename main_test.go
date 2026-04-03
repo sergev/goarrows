@@ -6,6 +6,7 @@ import (
 	"goarrows/levels"
 )
 
+// TestResolveProceduralSeed_unsetUnderTest checks that an unset -seed resolves to 0 when tests run.
 func TestResolveProceduralSeed_unsetUnderTest(t *testing.T) {
 	f := &optionalInt64Flag{}
 	if got := resolveProceduralSeed(f); got != 0 {
@@ -13,6 +14,7 @@ func TestResolveProceduralSeed_unsetUnderTest(t *testing.T) {
 	}
 }
 
+// TestResolveProceduralSeed_explicit checks that a set flag value is returned verbatim.
 func TestResolveProceduralSeed_explicit(t *testing.T) {
 	f := &optionalInt64Flag{}
 	if err := f.Set("42"); err != nil {
@@ -23,6 +25,7 @@ func TestResolveProceduralSeed_explicit(t *testing.T) {
 	}
 }
 
+// TestLoadPack_procedural ensures loadPack succeeds and yields a procedural pack of expected Len.
 func TestLoadPack_procedural(t *testing.T) {
 	p, err := loadPack(42)
 	if err != nil {

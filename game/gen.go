@@ -22,6 +22,7 @@ func GenerateFullBoard(w, h int, rng *rand.Rand) (Board, error) {
 	return GenerateBoard(w, h, rng)
 }
 
+// minInt returns the smaller of a and b.
 func minInt(a, b int) int {
 	if a < b {
 		return a
@@ -29,6 +30,7 @@ func minInt(a, b int) int {
 	return b
 }
 
+// absInt returns the absolute value of x.
 func absInt(x int) int {
 	if x < 0 {
 		return -x
@@ -53,6 +55,8 @@ type point struct {
 	x, y int
 }
 
+// neighborPoints returns empty orthogonal steps from tail toward extending the polyline:
+// in bounds, not backtracking to prev, not in occupied, and not on the current path.
 func neighborPoints(tail, prev point, w, h int, occupied []bool, pathSet map[point]struct{}) []point {
 	var out []point
 	for _, d := range []Direction{North, East, South, West} {
@@ -101,6 +105,7 @@ func pickBiasedTailStep(prev, tail point, cands []point, rng *rand.Rand, straigh
 	return cands[rng.IntN(len(cands))]
 }
 
+// oppositeDirGen returns the opposite cardinal direction (same idea as oppositeDir for graph wiring).
 func oppositeDirGen(d Direction) Direction {
 	switch d {
 	case North:
@@ -116,6 +121,7 @@ func oppositeDirGen(d Direction) Direction {
 	}
 }
 
+// dirFromTo returns the direction from (fromx,fromy) to an orthogonally adjacent (tox,toy).
 func dirFromTo(fromx, fromy, tox, toy int) Direction {
 	switch {
 	case tox == fromx && toy == fromy-1:
@@ -131,6 +137,7 @@ func dirFromTo(fromx, fromy, tox, toy int) Direction {
 	}
 }
 
+// headRuneForFire returns the Unicode head rune that fires in the given direction.
 func headRuneForFire(fire Direction) rune {
 	switch fire {
 	case North:
@@ -146,6 +153,7 @@ func headRuneForFire(fire Direction) rune {
 	}
 }
 
+// paintPath writes one polyline into grid: head at path[0], tail at path[len-1], using wire corners.
 func paintPath(grid []rune, w int, path []point) error {
 	if len(path) < 2 {
 		return errors.New("path too short")
@@ -175,6 +183,7 @@ func paintPath(grid []rune, w int, path []point) error {
 	return nil
 }
 
+// wireRuneOne returns the wire rune for a degree-1 (tail) cell opening toward dPrev (into the body).
 func wireRuneOne(d Direction) rune {
 	switch d {
 	case North, South:
@@ -186,6 +195,7 @@ func wireRuneOne(d Direction) rune {
 	}
 }
 
+// wireRuneTwo returns the corner or straight wire for an internal cell with neighbors along a and b.
 func wireRuneTwo(a, b Direction) rune {
 	if a == oppositeDirGen(b) {
 		if a == North || a == South {

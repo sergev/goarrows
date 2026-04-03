@@ -6,6 +6,7 @@ import (
 	"goarrows/game"
 )
 
+// TestInlineFixturesBuildPack parses several inline ASCII art levels into a fixed pack.
 func TestInlineFixturesBuildPack(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -37,6 +38,7 @@ func TestInlineFixturesBuildPack(t *testing.T) {
 	}
 }
 
+// TestInlineFixtureParseError expects ParseLevelString to reject an invalid two-row fixture.
 func TestInlineFixtureParseError(t *testing.T) {
 	invalid := "▶\n.."
 	if _, err := game.ParseLevelString(invalid); err == nil {

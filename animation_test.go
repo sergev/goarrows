@@ -8,6 +8,7 @@ import (
 	"goarrows/ui"
 )
 
+// TestBuildPointerFrames_EastStraight checks frame cells for a horizontal straight-line clear.
 func TestBuildPointerFrames_EastStraight(t *testing.T) {
 	b := game.NewBoard(6, 3)
 	b.Set(3, 1, game.Cell{R: '>'})
@@ -49,6 +50,7 @@ func TestBuildPointerFrames_EastStraight(t *testing.T) {
 	})
 }
 
+// TestBuildPointerFrames_NorthStraight checks frame cells for a vertical straight-line clear.
 func TestBuildPointerFrames_NorthStraight(t *testing.T) {
 	b := game.NewBoard(4, 6)
 	b.Set(2, 2, game.Cell{R: '^'})
@@ -79,6 +81,7 @@ func TestBuildPointerFrames_NorthStraight(t *testing.T) {
 	})
 }
 
+// TestBuildPointerFrames_BentPath checks early frames when the polyline turns before exiting.
 func TestBuildPointerFrames_BentPath(t *testing.T) {
 	b := game.NewBoard(6, 4)
 	b.Set(3, 1, game.Cell{R: '>'})
@@ -112,6 +115,7 @@ func TestBuildPointerFrames_BentPath(t *testing.T) {
 	})
 }
 
+// TestHeadPositionForStep verifies headPositionForStep on-ray and past-edge steps.
 func TestHeadPositionForStep(t *testing.T) {
 	ray := []struct{ X, Y int }{{2, 1}, {3, 1}}
 	x, y := headPositionForStep(ray, 1, 0, 1)
@@ -124,6 +128,7 @@ func TestHeadPositionForStep(t *testing.T) {
 	}
 }
 
+// TestFireTravelCells_AllDirections checks open-ray cell lists for all four head directions.
 func TestFireTravelCells_AllDirections(t *testing.T) {
 	tests := []struct {
 		name string
@@ -147,6 +152,7 @@ func TestFireTravelCells_AllDirections(t *testing.T) {
 	}
 }
 
+// TestTryStartFireAnimation_InitializesState checks anim state after a successful start on a clear shot.
 func TestTryStartFireAnimation_InitializesState(t *testing.T) {
 	b := game.NewBoard(6, 3)
 	b.Set(3, 1, game.Cell{R: '>'})
@@ -169,6 +175,7 @@ func TestTryStartFireAnimation_InitializesState(t *testing.T) {
 	}
 }
 
+// assertFrameCells fails the test if overlay cell slices differ element-wise.
 func assertFrameCells(t *testing.T, got, want []ui.OverlayCell) {
 	t.Helper()
 	if len(got) != len(want) {
@@ -182,6 +189,7 @@ func assertFrameCells(t *testing.T, got, want []ui.OverlayCell) {
 	}
 }
 
+// assertPoints fails the test if coordinate slices differ element-wise.
 func assertPoints(t *testing.T, got, want []struct{ X, Y int }) {
 	t.Helper()
 	if len(got) != len(want) {

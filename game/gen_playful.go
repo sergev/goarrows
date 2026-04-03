@@ -1,5 +1,6 @@
 package game
 
+// countInitialRayEscapes counts heads whose firing ray reaches the board edge with no obstruction.
 func countInitialRayEscapes(b Board) int {
 	n := 0
 	for y := 0; y < b.H; y++ {

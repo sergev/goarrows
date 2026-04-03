@@ -4,6 +4,7 @@ import (
 	"testing"
 )
 
+// TestProceduralPackLevelAt checks level sizing, naming, memoization, and Len for procedural packs.
 func TestProceduralPackLevelAt(t *testing.T) {
 	p := NewProceduralPack(42)
 	b, name, err := p.LevelAt(0)

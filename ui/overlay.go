@@ -57,6 +57,7 @@ func DrawModalOverlay(s tcell.Screen, sw, sh int, o *ModalOverlay, fill tcell.St
 	drawBoxOverlay(s, sw, sh, o.Lines, fill.Foreground(tcell.ColorWhite).Background(bg))
 }
 
+// drawBoxOverlay draws a Unicode box centered on the screen and fills it with lines of text.
 func drawBoxOverlay(s tcell.Screen, sw, sh int, lines []string, st tcell.Style) {
 	boxW := 0
 	for _, ln := range lines {

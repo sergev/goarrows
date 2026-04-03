@@ -37,6 +37,7 @@ type optionalInt64Flag struct {
 	value int64
 }
 
+// String implements flag.Value: empty when -seed was not passed, else the decimal seed.
 func (o *optionalInt64Flag) String() string {
 	if !o.set {
 		return ""
@@ -44,6 +45,7 @@ func (o *optionalInt64Flag) String() string {
 	return strconv.FormatInt(o.value, 10)
 }
 
+// Set implements flag.Value, parsing a base-10 int64 and marking the flag as present.
 func (o *optionalInt64Flag) Set(s string) error {
 	v, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
@@ -54,6 +56,7 @@ func (o *optionalInt64Flag) Set(s string) error {
 	return nil
 }
 
+// resolveProceduralSeed returns the explicit -seed value, or 0 under tests, or a time-based seed.
 func resolveProceduralSeed(f *optionalInt64Flag) int64 {
 	if f.set {
 		return f.value
@@ -64,6 +67,8 @@ func resolveProceduralSeed(f *optionalInt64Flag) int64 {
 	return time.Now().UnixNano()
 }
 
+// main parses flags, opens the tcell screen, runs the input/render loop (HUD, help, modals,
+// optional fire animation), and tears down on quit.
 func main() {
 	startLives := flag.Int("lives", 3, "starting lives per level (use -1 for unlimited)")
 	seedFlag := &optionalInt64Flag{}
@@ -317,6 +322,7 @@ func main() {
 	}
 }
 
+// loadPack builds a procedural pack and ensures level 0 can be generated (fail fast).
 func loadPack(seed int64) (*levels.Pack, error) {
 	p := levels.NewProceduralPack(seed)
 	if _, _, err := p.LevelAt(0); err != nil {
@@ -325,6 +331,7 @@ func loadPack(seed int64) (*levels.Pack, error) {
 	return p, nil
 }
 
+// newGameForLevel loads level idx; negative startLives is mapped to a huge life pool for “unlimited”.
 func newGameForLevel(p *levels.Pack, idx, startLives int) *game.Game {
 	b, name, err := p.LevelAt(idx)
 	if err != nil {
@@ -337,6 +344,7 @@ func newGameForLevel(p *levels.Pack, idx, startLives int) *game.Game {
 	return game.NewGame(b, lives, name)
 }
 
+// newGameWithGenOverlay shows a “generating” overlay if the procedural level is not cached yet.
 func newGameWithGenOverlay(pack *levels.Pack, idx, startLives int, generatingN *int, redraw func()) *game.Game {
 	n := pack.ProceduralSideLen(idx)
 	if n > 0 && !pack.ProceduralLevelReady(idx) {
@@ -348,6 +356,7 @@ func newGameWithGenOverlay(pack *levels.Pack, idx, startLives int, generatingN *
 	return g
 }
 
+// resetLevel reloads the same index from the pack and resets lives (replay current level).
 func resetLevel(p *levels.Pack, g **game.Game, idx, startLives int) {
 	b, _, err := p.LevelAt(idx)
 	if err != nil {
@@ -360,6 +369,7 @@ func resetLevel(p *levels.Pack, g **game.Game, idx, startLives int) {
 	(*g).Reset(b, lives)
 }
 
+// clampCursor keeps the cursor inside the board rectangle.
 func clampCursor(g *game.Game, cx, cy *int) {
 	if *cx >= g.Board.W {
 		*cx = g.Board.W - 1
@@ -375,12 +385,14 @@ func clampCursor(g *game.Game, cx, cy *int) {
 	}
 }
 
+// moveCursor applies a delta in logical cells and clamps to the board.
 func moveCursor(g *game.Game, cx, cy *int, dx, dy int) {
 	*cx += dx
 	*cy += dy
 	clampCursor(g, cx, cy)
 }
 
+// applyFire runs TryFire and maps outcomes to status text and win/lose modals (no-op if already terminal).
 func applyFire(g *game.Game, cx, cy, startLives int) fireUIResult {
 	if g.Won() || g.Lost() {
 		return fireUIResult{}
@@ -423,6 +435,7 @@ func applyFire(g *game.Game, cx, cy, startLives int) fireUIResult {
 	}
 }
 
+// tryStartFireAnimation prepares ray-snake frames for a clearing shot; returns false if animation is skipped.
 func tryStartFireAnimation(g *game.Game, cx, cy int, anim *animState, stepDur time.Duration) bool {
 	if g.Won() || g.Lost() || !g.Board.InBounds(cx, cy) {
 		return false
@@ -453,6 +466,7 @@ func tryStartFireAnimation(g *game.Game, cx, cy int, anim *animState, stepDur ti
 	return true
 }
 
+// buildPointerFrames builds per-step overlays: head slides along ray then past the edge while the tail follows.
 func buildPointerFrames(b game.Board, path, ray []struct{ X, Y int }, headRune rune) ([]ui.FireAnimOverlay, bool) {
 	if len(path) == 0 || len(ray) == 0 {
 		return nil, false
@@ -494,6 +508,7 @@ func buildPointerFrames(b game.Board, path, ray []struct{ X, Y int }, headRune r
 	return frames, len(frames) > 0
 }
 
+// headPositionForStep is the animated head cell after step steps (1-based): along ray then off-board.
 func headPositionForStep(ray []struct{ X, Y int }, dx, dy, step int) (int, int) {
 	if step <= len(ray) {
 		p := ray[step-1]
@@ -504,6 +519,7 @@ func headPositionForStep(ray []struct{ X, Y int }, dx, dy, step int) (int, int) 
 	return last.X + extra*dx, last.Y + extra*dy
 }
 
+// straightBodyRune is the wire rune left behind as the head moves (matches fire axis).
 func straightBodyRune(d game.Direction) rune {
 	switch d {
 	case game.North, game.South:
@@ -513,6 +529,7 @@ func straightBodyRune(d game.Direction) rune {
 	}
 }
 
+// fireTravelCells lists empty cells from the head cell along the open ray to the board edge (exclusive of head).
 func fireTravelCells(b game.Board, cx, cy int) []struct{ X, Y int } {
 	c := b.At(cx, cy)
 	fire, ok := game.HeadFireDir(c.R)

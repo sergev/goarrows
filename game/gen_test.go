@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// countHeads returns how many cells are arrow heads on b.
 func countHeads(b Board) int {
 	n := 0
 	for y := 0; y < b.H; y++ {
@@ -17,6 +18,7 @@ func countHeads(b Board) int {
 	return n
 }
 
+// boardRunesEqual compares two boards’ dimensions and per-cell runes.
 func boardRunesEqual(a, b Board) bool {
 	if a.W != b.W || a.H != b.H || len(a.Data) != len(b.Data) {
 		return false
@@ -29,6 +31,7 @@ func boardRunesEqual(a, b Board) bool {
 	return true
 }
 
+// TestCellOnOpenRayFromHead exercises cellOnOpenRayFromHead across directions and edge cases.
 func TestCellOnOpenRayFromHead(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -55,6 +58,7 @@ func TestCellOnOpenRayFromHead(t *testing.T) {
 	}
 }
 
+// TestGenerateFullBoardValidateAndPlayable smoke-tests generation, validation, and greedy solvability at several sizes.
 func TestGenerateFullBoardValidateAndPlayable(t *testing.T) {
 	sizes := []int{3, 4, 5, 6}
 	if testing.Short() {
@@ -90,6 +94,7 @@ func TestGenerateFullBoardValidateAndPlayable(t *testing.T) {
 	}
 }
 
+// TestGenerateFullBoardLargeSmoke runs one larger board under a tight test timeout budget.
 func TestGenerateFullBoardLargeSmoke(t *testing.T) {
 	// Tuned for `go test -timeout 10s ./...` (see Makefile).
 	sizes := []int{8}
@@ -108,6 +113,7 @@ func TestGenerateFullBoardLargeSmoke(t *testing.T) {
 	}
 }
 
+// TestGenerateFullBoardReproducible checks identical PCG state yields identical boards.
 func TestGenerateFullBoardReproducible(t *testing.T) {
 	const seed0, seed1 uint64 = 0x1234abcd, 0xf00dcafe
 	rng1 := rand.New(rand.NewPCG(seed0, seed1))
@@ -125,6 +131,7 @@ func TestGenerateFullBoardReproducible(t *testing.T) {
 	}
 }
 
+// TestGenerateFullBoardPlayfulnessSmoke sanity-checks initial RayEscapes head count on one board.
 func TestGenerateFullBoardPlayfulnessSmoke(t *testing.T) {
 	rng := rand.New(rand.NewPCG(2024, 303))
 	b, err := GenerateFullBoard(8, 8, rng)
@@ -137,6 +144,7 @@ func TestGenerateFullBoardPlayfulnessSmoke(t *testing.T) {
 	}
 }
 
+// TestGenerateFullBoardVariedHeadCount expects every generated board in a seed sweep to have at least one head.
 func TestGenerateFullBoardVariedHeadCount(t *testing.T) {
 	// Grow generator should consistently produce boards with at least one head.
 	const n = 8
@@ -160,6 +168,7 @@ func TestGenerateFullBoardVariedHeadCount(t *testing.T) {
 	}
 }
 
+// TestGenerateFullBoardMultipleComponents checks non-square rectangles still produce at least one head.
 func TestGenerateFullBoardMultipleComponents(t *testing.T) {
 	// Grow generator should produce at least one arrowhead.
 	cases := []struct {
@@ -182,6 +191,7 @@ func TestGenerateFullBoardMultipleComponents(t *testing.T) {
 	}
 }
 
+// TestGenerateFullBoardGreedyClearsTiny asserts greedy solvability on a tiny generated board.
 func TestGenerateFullBoardGreedyClearsTiny(t *testing.T) {
 	rng := rand.New(rand.NewPCG(7, 11))
 	b, err := GenerateFullBoard(3, 3, rng)
@@ -193,6 +203,7 @@ func TestGenerateFullBoardGreedyClearsTiny(t *testing.T) {
 	}
 }
 
+// TestVerifyGreedyFirstClearsBoard_verticalArrow checks greedy clear on a hand-built vertical arrow.
 func TestVerifyGreedyFirstClearsBoard_verticalArrow(t *testing.T) {
 	b := NewBoard(2, 2)
 	b.Set(0, 0, Cell{R: '▲'})
@@ -202,6 +213,7 @@ func TestVerifyGreedyFirstClearsBoard_verticalArrow(t *testing.T) {
 	}
 }
 
+// TestGenerateBoardGrowSmoke validates one grow-generated board and the “half fireable” heuristic when heads ≥ 2.
 func TestGenerateBoardGrowSmoke(t *testing.T) {
 	rng := rand.New(rand.NewPCG(99, 101))
 	b, err := GenerateBoard(7, 7, rng)
@@ -232,6 +244,7 @@ func TestGenerateBoardGrowSmoke(t *testing.T) {
 	}
 }
 
+// TestGrowPlayfulEnough checks growPlayfulEnough rejects too-easy two-head boards and skips the check for one head.
 func TestGrowPlayfulEnough(t *testing.T) {
 	b := NewBoard(5, 2)
 	b.Set(0, 0, Cell{R: '▲'})
@@ -253,6 +266,7 @@ func TestGrowPlayfulEnough(t *testing.T) {
 	}
 }
 
+// TestGenGrowConstant locks the GenGrow algorithm name string used by the game.
 func TestGenGrowConstant(t *testing.T) {
 	if GenGrow != "grow" {
 		t.Fatalf("GenGrow = %q, want %q", GenGrow, "grow")

@@ -54,10 +54,12 @@ func TryFire(g *Game, x, y int) FireResult {
 	return FireCleared
 }
 
+// Won reports whether every cell is empty (all arrows removed).
 func (g *Game) Won() bool {
 	return g.Board.NonEmptyCount() == 0
 }
 
+// Lost reports whether lives are exhausted while the board still has arrows.
 func (g *Game) Lost() bool {
 	return g.Lives <= 0 && g.Board.NonEmptyCount() > 0
 }

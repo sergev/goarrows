@@ -97,6 +97,7 @@ func HorizontalLink(b Board, x, y int) bool {
 	return linked(b.At(x, y), b.At(x+1, y), East)
 }
 
+// dirToPort maps a Direction to its PortN/PortE/PortS/PortW bit.
 func dirToPort(d Direction) uint8 {
 	switch d {
 	case North:
@@ -112,6 +113,7 @@ func dirToPort(d Direction) uint8 {
 	}
 }
 
+// oppositeDir returns the 180° opposite cardinal direction.
 func oppositeDir(d Direction) Direction {
 	switch d {
 	case North:
@@ -306,6 +308,7 @@ func ValidatePartialBoard(b Board) error {
 	return nil
 }
 
+// popcount returns the number of set bits in m (degree of a port mask).
 func popcount(m uint8) int {
 	n := 0
 	for m != 0 {
@@ -396,6 +399,7 @@ func stepAlongPorts(b Board, x, y int, eff uint8, px, py int) (int, int, bool) {
 	return 0, 0, false
 }
 
+// directionFromTo returns the Direction from (x0,y0) to orthogonally adjacent (x1,y1).
 func directionFromTo(x0, y0, x1, y1 int) Direction {
 	switch {
 	case x1 == x0 && y1 == y0-1:

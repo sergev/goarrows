@@ -78,6 +78,7 @@ func DrawGrid(s tcell.Screen, ox, oy int, b game.Board, cursorX, cursorY int, ba
 	}
 }
 
+// fireAnimHidePath returns cells masked to spaces during the fire animation (nil-safe).
 func fireAnimHidePath(f *FireAnimOverlay) []struct{ X, Y int } {
 	if f == nil {
 		return nil
@@ -85,6 +86,7 @@ func fireAnimHidePath(f *FireAnimOverlay) []struct{ X, Y int } {
 	return f.HidePath
 }
 
+// fireAnimCells returns overlay glyphs for the current animation frame (nil-safe).
 func fireAnimCells(f *FireAnimOverlay) []OverlayCell {
 	if f == nil {
 		return nil
@@ -92,6 +94,7 @@ func fireAnimCells(f *FireAnimOverlay) []OverlayCell {
 	return f.Cells
 }
 
+// pathCellSet maps linear cell indices (y*w+x) for fast membership on hidePath.
 func pathCellSet(w int, path []struct{ X, Y int }) map[int]struct{} {
 	m := make(map[int]struct{}, len(path))
 	for _, p := range path {
@@ -100,6 +103,7 @@ func pathCellSet(w int, path []struct{ X, Y int }) map[int]struct{} {
 	return m
 }
 
+// overlayCellSet maps linear indices to overlay cells (last write wins per cell).
 func overlayCellSet(w int, cells []OverlayCell) map[int]OverlayCell {
 	m := make(map[int]OverlayCell, len(cells))
 	for _, c := range cells {
@@ -108,6 +112,7 @@ func overlayCellSet(w int, cells []OverlayCell) map[int]OverlayCell {
 	return m
 }
 
+// pathHasHorizontalEdge reports whether the polyline includes the east edge between (x,y) and (x+1,y).
 func pathHasHorizontalEdge(path []struct{ X, Y int }, x, y int) bool {
 	for i := 0; i+1 < len(path); i++ {
 		a, b := path[i], path[i+1]
@@ -119,6 +124,7 @@ func pathHasHorizontalEdge(path []struct{ X, Y int }, x, y int) bool {
 	return false
 }
 
+// hasHorizontalOverlayEdge reports overlay cells on both (x,y) and (x+1,y) for drawing a bridge.
 func hasHorizontalOverlayEdge(cells map[int]OverlayCell, w, x, y int) bool {
 	_, left := cells[y*w+x]
 	_, right := cells[y*w+x+1]

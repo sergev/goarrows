@@ -25,6 +25,7 @@ type proceduralSource struct {
 	memo map[int]procMemo
 }
 
+// newProceduralSource creates a memoizing generator for on-demand procedural boards.
 func newProceduralSource(seed int64) *proceduralSource {
 	return &proceduralSource{
 		seed: seed,
@@ -32,6 +33,7 @@ func newProceduralSource(seed int64) *proceduralSource {
 	}
 }
 
+// levelAt builds or returns cached level i: (i+3)×(i+3) board, trying successive RNG seeds on failure.
 func (p *proceduralSource) levelAt(i int) (game.Board, string, error) {
 	if i < 0 {
 		return game.Board{}, "", fmt.Errorf("negative level index")

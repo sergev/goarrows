@@ -18,6 +18,7 @@ func targetArrowCountForSide(n int) int {
 	}
 }
 
+// clampArrowCount caps the target polyline count to [1, wh/2] so seeds fit on the grid.
 func clampArrowCount(targetArrows, wh int) int {
 	maxArrows := wh / 2
 	if maxArrows < 1 {
@@ -98,6 +99,7 @@ func growPlayfulEnough(b Board) bool {
 	return 2*fireable <= total
 }
 
+// tryGrowPartition builds initial seed paths then repeatedly extends tails until no move remains.
 func tryGrowPartition(w, h, nHeads int, rng *rand.Rand) ([][]point, bool) {
 	paths, ok := seedGrowPaths(w, h, nHeads, rng)
 	if !ok {
@@ -153,6 +155,7 @@ func tryGrowPartition(w, h, nHeads int, rng *rand.Rand) ([][]point, bool) {
 	return paths, true
 }
 
+// seedGrowPaths places nHeads disjoint two-cell paths (head + one body) with random orientation.
 func seedGrowPaths(w, h, nHeads int, rng *rand.Rand) ([][]point, bool) {
 	wh := w * h
 	occupied := make([]bool, wh)
@@ -199,6 +202,7 @@ func seedGrowPaths(w, h, nHeads int, rng *rand.Rand) ([][]point, bool) {
 	return paths, true
 }
 
+// rayHitsPreviousHead reports whether the open ray from head (hx,hy) in fire direction passes any prior head.
 func rayHitsPreviousHead(hx, hy int, fire Direction, heads []point, w, h int) bool {
 	dx, dy := Delta(fire)
 	for cx, cy := hx+dx, hy+dy; cx >= 0 && cx < w && cy >= 0 && cy < h; cx, cy = cx+dx, cy+dy {
@@ -211,6 +215,7 @@ func rayHitsPreviousHead(hx, hy int, fire Direction, heads []point, w, h int) bo
 	return false
 }
 
+// boardFromPaths rasterizes polylines into a Board via paintPath (each path must be disjoint).
 func boardFromPaths(paths [][]point, w, h int) (Board, error) {
 	grid := make([]rune, w*h)
 	for _, path := range paths {
