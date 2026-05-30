@@ -9,20 +9,23 @@ import (
 // exist while extending a body. Higher values produce longer straight runs.
 const growStraightChance10 = 9
 
-// rayCand is one valid (head, fire) placement found by enumerateClearRayCandidates.
-// rayLen is the number of in-board cells the open firing ray walks before leaving
-// the board — used as the sampling weight (longer rays preferred) so heads don't
-// all face the nearest edge.
-type rayCand struct {
+// cellCand is one valid (head-cell, fire-direction) candidate from
+// enumerateAllCandidates. rayLen is the number of in-board cells along the
+// open firing ray — used as one factor in the placement weight.
+type cellCand struct {
 	x, y   int
 	fire   Direction
 	rayLen int
 }
 
 // generateFullBoardReverse builds a w×h board by placing arrows in reverse firing
-// order. Each placement requires that the new head's open firing ray is clear on
-// the current partial board, so forward play clears every arrow by construction —
-// no ValidatePartialBoard / VerifySolvableFast rejection is needed in production.
+// order. Each placement enumerates all valid (cell, fire) candidates and samples
+// one weighted by three factors: long firing ray (rayLen+1), spatial spread to
+// the nearest same-direction head (minDist²+1), and quota deficit relative to
+// the target ≈K/4 per direction (deficit²+1). These three multipliers
+// simultaneously avoid edge-fire-out clusters, scatter same-direction heads, and
+// keep global direction counts close to ⌈K/4⌉ ± 1 — all while respecting the
+// constructive ray-clearance invariant that guarantees forward solvability.
 func generateFullBoardReverse(w, h int, rng *rand.Rand) (Board, error) {
 	if w <= 0 || h <= 0 {
 		return Board{}, fmt.Errorf("gen: invalid size %d×%d", w, h)
@@ -35,27 +38,31 @@ func generateFullBoardReverse(w, h int, rng *rand.Rand) (Board, error) {
 	n := min(w, h)
 	nHeads := clampArrowCount(targetArrowCountForSide(n), wh)
 	sc := newGenScratch(w, h, nHeads)
-	// bodyLenBound caps the per-arrow body length to keep arrows competing for
-	// space rather than letting the first-placed arrow consume the grid. The
-	// random walk still varies length per-arrow within [1, bodyLenBound], so
-	// shapes stay diverse. 2*wh/nHeads centers the distribution around the
-	// average cells-per-arrow needed for ~full coverage.
-	bodyLenBound := 2 * wh / nHeads
+	bodyLenBound := wh / nHeads
 	if bodyLenBound < 2 {
 		bodyLenBound = 2
 	}
+	// Same-direction heads must be at Chebyshev distance ≥ minSameDirDist
+	// from each other. 2 means they cannot touch (no immediate neighbours);
+	// this is the visible "cluster" the user wanted to eliminate. The
+	// constraint is hard inside enumerateAllCandidates — if it leaves no
+	// candidates, the per-step countSlack relaxation is tried, and if that
+	// also fails the whole board is restarted with a fresh sub-RNG.
+	const minSameDirDist = 2
 	const maxRestarts = 128
 	for restart := 0; restart < maxRestarts; restart++ {
-		// Sub-RNG per restart so reproducibility holds: a fixed parent PCG state
-		// always consumes the same number of uint64s, regardless of how many
-		// restarts the inner loop performs.
 		sub := rand.New(rand.NewPCG(rng.Uint64(), rng.Uint64()))
 		clear(sc.glyphAt[:wh])
 		sc.headXs = sc.headXs[:0]
 		sc.headYs = sc.headYs[:0]
+		for i := range sc.headByDir {
+			sc.headByDir[i] = sc.headByDir[i][:0]
+		}
+		targets := perDirTargets(nHeads, sub)
+
 		placed := 0
 		for placed < nHeads {
-			if !placeArrowReverse(w, h, bodyLenBound, sub, sc) {
+			if !placeArrowBalanced(w, h, bodyLenBound, targets, minSameDirDist, sub, sc) {
 				break
 			}
 			placed++
@@ -80,68 +87,112 @@ func generateFullBoardReverse(w, h int, rng *rand.Rand) (Board, error) {
 	return Board{}, fmt.Errorf("gen: could not build reverse board for %d×%d", w, h)
 }
 
-// placeArrowReverse picks an (empty cell, fire direction) with a clear ray on
-// the current sc.glyphAt, grows a body away from it (capped at a random length
-// in [1, bodyLenBound]), and writes both the head and body glyphs. Returns
-// false when no valid placement exists.
-func placeArrowReverse(w, h, bodyLenBound int, rng *rand.Rand, sc *genScratch) bool {
-	cands := enumerateClearRayCandidates(w, h, sc, sc.candBuf[:0])
-	sc.candBuf = cands
+// perDirTargets returns the target head-count per fire direction such that the
+// four counts sum to K and are within ±1 of each other. The +1 slots are
+// rotated by a random offset so no direction is systematically favoured.
+func perDirTargets(K int, rng *rand.Rand) [4]int {
+	var t [4]int
+	base := K / 4
+	rem := K - base*4
+	offset := rng.IntN(4)
+	for i := 0; i < 4; i++ {
+		t[i] = base
+		if (i-offset+4)%4 < rem {
+			t[i]++
+		}
+	}
+	return t
+}
+
+// placeArrowBalanced enumerates every valid (cell, fire) candidate on the
+// current sc.glyphAt, samples one with weight combining ray-length, spatial
+// spread to nearest same-direction head, and an under-target deficit bias,
+// then commits the head and grows the body. Two hard constraints are relaxed
+// progressively when no candidate exists: (a) each direction's head count
+// cannot exceed targets[fire] + countSlack, and (b) the candidate cell must
+// be at Chebyshev distance ≥ minSameDirDist from every head firing in the
+// same direction. minSameDirDist starts at an ideal value derived from K and
+// shrinks first; countSlack only grows after the distance constraint reaches
+// 1 (i.e. only forbid same-cell, which is already excluded by occupancy).
+func placeArrowBalanced(w, h, bodyLenBound int, targets [4]int, minSameDirDist int, rng *rand.Rand, sc *genScratch) bool {
+	// Try the hard minimum distance first; if it leaves no candidates, relax
+	// the count cap by one (allowing one direction to overshoot) but keep the
+	// distance constraint hard. Distance is non-negotiable: it's what
+	// prevents same-direction clusters. Restart-on-failure is the safety net.
+	cands := enumerateAllCandidates(w, h, sc, sc.cellCands[:0], targets, 0, minSameDirDist)
+	sc.cellCands = cands
+	if len(cands) == 0 {
+		cands = enumerateAllCandidates(w, h, sc, sc.cellCands[:0], targets, 1, minSameDirDist)
+		sc.cellCands = cands
+	}
+	if len(cands) == 0 {
+		cands = enumerateAllCandidates(w, h, sc, sc.cellCands[:0], targets, 2, minSameDirDist)
+		sc.cellCands = cands
+	}
 	if len(cands) == 0 {
 		return false
 	}
-	choice := pickWeightedRay(cands, rng)
+	choice := pickWeighted(cands, targets, w, h, sc, rng)
 	hx, hy, fire := choice.x, choice.y, choice.fire
-
 	bdx, bdy := Delta(oppositeDir(fire))
 	ax, ay := hx+bdx, hy+bdy
 
-	// Reserve the head cell before body growth so the random walk treats it as
-	// occupied and never wanders back through it. Head glyphs are not wires, so
-	// they cannot accidentally link with any neighbor (NominalPorts(head) == 0
-	// and linkMask(head) only exposes the body-direction port, which faces the
-	// anchor on this same path).
 	sc.glyphAt[hy*w+hx] = headRuneForFire(fire)
 	sc.headXs = append(sc.headXs, hx)
 	sc.headYs = append(sc.headYs, hy)
+	sc.headByDir[fire] = append(sc.headByDir[fire], Point{hx, hy})
 	maxLen := 1 + rng.IntN(bodyLenBound)
 	growBodyReverse(hx, hy, fire, ax, ay, maxLen, w, h, rng, sc)
 	return true
 }
 
-// pickWeightedRay samples a rayCand with weight proportional to rayLen+1. This
-// down-weights edge-fire-out placements (rayLen == 0) so heads don't all face
-// the nearest board edge. The +1 keeps short-ray placements possible when
-// long-ray ones aren't available (small or nearly-full boards).
-func pickWeightedRay(cands []rayCand, rng *rand.Rand) rayCand {
-	total := 0
-	for _, c := range cands {
-		total += c.rayLen + 1
-	}
-	target := rng.IntN(total)
-	for _, c := range cands {
-		target -= c.rayLen + 1
-		if target < 0 {
-			return c
-		}
-	}
-	return cands[len(cands)-1]
-}
-
-// enumerateClearRayCandidates scans every (empty cell, fire direction) pair and
-// keeps those that meet the placement preconditions on the current sc.glyphAt:
-// the body anchor is empty and in-bounds, the open firing ray contains no
-// occupied cells, and the anchor's dangling port (the wire face opposite the
-// head) wouldn't form an accidental cross-path link with the cell beyond it.
-// Output is appended to out (caller-owned).
-func enumerateClearRayCandidates(w, h int, sc *genScratch, out []rayCand) []rayCand {
+// enumerateAllCandidates collects every (cell, fire) pair that can host a
+// head on the current sc.glyphAt: cell empty, body anchor empty and in-bounds,
+// open ray clear, anchor's dangling port wouldn't form an accidental cross-
+// path link, fire direction's count is below targets[fire] + countSlack, and
+// the cell is at Chebyshev distance at least minSameDirDist from every head
+// already firing in that direction. The rayLen recorded is the number of in-
+// board cells walked along the open ray. Output is appended to out.
+func enumerateAllCandidates(w, h int, sc *genScratch, out []cellCand, targets [4]int, countSlack, minSameDirDist int) []cellCand {
 	g := sc.glyphAt[:w*h]
+	var dirCap [4]int
+	for i := 0; i < 4; i++ {
+		dirCap[i] = targets[i] + countSlack
+	}
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
 			if g[y*w+x] != 0 {
 				continue
 			}
 			for _, fire := range [4]Direction{North, East, South, West} {
+				if len(sc.headByDir[fire]) >= dirCap[fire] {
+					continue
+				}
+				if minSameDirDist > 0 {
+					sameDir := sc.headByDir[fire]
+					tooClose := false
+					for _, q := range sameDir {
+						dxh := x - q.X
+						if dxh < 0 {
+							dxh = -dxh
+						}
+						dyh := y - q.Y
+						if dyh < 0 {
+							dyh = -dyh
+						}
+						d := dxh
+						if dyh > d {
+							d = dyh
+						}
+						if d < minSameDirDist {
+							tooClose = true
+							break
+						}
+					}
+					if tooClose {
+						continue
+					}
+				}
 				bdx, bdy := Delta(oppositeDir(fire))
 				bx, by := x+bdx, y+bdy
 				if bx < 0 || bx >= w || by < 0 || by >= h {
@@ -151,29 +202,102 @@ func enumerateClearRayCandidates(w, h int, sc *genScratch, out []rayCand) []rayC
 					continue
 				}
 				dx, dy := Delta(fire)
-				clear := true
+				clearRay := true
 				rayLen := 0
 				for cx, cy := x+dx, y+dy; cx >= 0 && cx < w && cy >= 0 && cy < h; cx, cy = cx+dx, cy+dy {
 					if g[cy*w+cx] != 0 {
-						clear = false
+						clearRay = false
 						break
 					}
 					rayLen++
 				}
-				if !clear {
+				if !clearRay {
 					continue
 				}
-				// Anchor (bx,by) will be written as wireRuneOne pointing at
-				// the head (x,y). Its dangling port points further away from
-				// the head — verify that face doesn't accidentally link.
 				if wouldLinkAcrossPaths(x, y, bx, by, w, h, g) {
 					continue
 				}
-				out = append(out, rayCand{x: x, y: y, fire: fire, rayLen: rayLen})
+				out = append(out, cellCand{x: x, y: y, fire: fire, rayLen: rayLen})
 			}
 		}
 	}
 	return out
+}
+
+// pickWeighted samples a candidate using three multiplicative weight factors:
+//
+//   - (rayLen + 1)   — prefer placements with long firing rays (heads pointing
+//     into the populated board) over edge-fire-out placements
+//     (rayLen == 0).
+//   - (minDist² + 1) — per-fire-direction spatial spread, where minDist is the
+//     Chebyshev distance to the nearest already-placed head
+//     facing the same direction. Squared so the influence
+//     drops quickly with distance.
+//   - (deficit² + 1) — bias toward under-target directions. deficit =
+//     max(0, targets[fire] - count[fire]). Once a direction
+//     hits target, deficit clamps at zero (factor 1); the
+//     hard cap in enumerateAllCandidates is what actually
+//     prevents over-running it, but this term focuses the
+//     sampler on the directions that still need filling
+//     when several caps are open at once.
+//
+// First-placement-of-a-direction is treated as "max spread" (minDist =
+// max(w,h)) so the first N/E/S/W heads are governed by rayLen and deficit.
+func pickWeighted(cands []cellCand, targets [4]int, w, h int, sc *genScratch, rng *rand.Rand) cellCand {
+	noSpreadDist := w
+	if h > w {
+		noSpreadDist = h
+	}
+	weight := func(c cellCand) int {
+		sameDir := sc.headByDir[c.fire]
+		minDist := noSpreadDist
+		if len(sameDir) > 0 {
+			minDist = chebyshevMinDist(c.x, c.y, sameDir)
+		}
+		deficit := targets[c.fire] - len(sameDir)
+		if deficit < 0 {
+			deficit = 0
+		}
+		spread := minDist * minDist
+		spread *= spread // minDist^4 — quadratic penalty on closeness
+		return (c.rayLen + 1) * (spread + 1) * (deficit*deficit + 1)
+	}
+	total := 0
+	for _, c := range cands {
+		total += weight(c)
+	}
+	target := rng.IntN(total)
+	for _, c := range cands {
+		target -= weight(c)
+		if target < 0 {
+			return c
+		}
+	}
+	return cands[len(cands)-1]
+}
+
+// chebyshevMinDist returns the smallest L∞ distance from (x,y) to any point
+// in pts. Assumes pts is non-empty.
+func chebyshevMinDist(x, y int, pts []Point) int {
+	best := -1
+	for _, p := range pts {
+		dx := x - p.X
+		if dx < 0 {
+			dx = -dx
+		}
+		dy := y - p.Y
+		if dy < 0 {
+			dy = -dy
+		}
+		d := dx
+		if dy > d {
+			d = dy
+		}
+		if best < 0 || d < best {
+			best = d
+		}
+	}
+	return best
 }
 
 // growBodyReverse extends the body from anchor (ax,ay) by random walk until no
@@ -183,7 +307,6 @@ func enumerateClearRayCandidates(w, h int, sc *genScratch, out []rayCand) []rayC
 // path (wouldLinkAcrossPaths). maxLen counts the anchor as cell 1.
 func growBodyReverse(hx, hy int, fire Direction, ax, ay, maxLen, w, h int, rng *rand.Rand, sc *genScratch) {
 	g := sc.glyphAt[:w*h]
-	// Anchor is the first body cell, written as a degree-1 wire pointing toward the head.
 	g[ay*w+ax] = wireRuneOne(directionFromTo(ax, ay, hx, hy))
 	prev := Point{hx, hy}
 	tail := Point{ax, ay}
@@ -215,7 +338,6 @@ func growBodyReverse(hx, hy int, fire Direction, ax, ay, maxLen, w, h int, rng *
 			return
 		}
 		next := pickBiasedTailStep(prev, tail, cands, rng, growStraightChance10)
-		// Promote tail from degree-1 to degree-2 wire (straight or corner).
 		g[tail.Y*w+tail.X] = wireRuneTwo(
 			directionFromTo(tail.X, tail.Y, prev.X, prev.Y),
 			directionFromTo(tail.X, tail.Y, next.X, next.Y),
@@ -230,8 +352,7 @@ func growBodyReverse(hx, hy int, fire Direction, ax, ay, maxLen, w, h int, rng *
 // wouldLinkAcrossPaths reports whether writing a degree-1 wire at (nx,ny) that
 // points back at (tx,ty) would form a mutual-consent port link with any
 // already-placed cell other than (tx,ty). Heads have no nominal wire ports so
-// they cannot accidentally link to a foreign wire (the head's body-direction
-// port already faces its own body, which is on its own path).
+// they cannot accidentally link to a foreign wire.
 func wouldLinkAcrossPaths(tx, ty, nx, ny, w, h int, g []rune) bool {
 	dirToT := directionFromTo(nx, ny, tx, ty)
 	newGlyph := wireRuneOne(dirToT)

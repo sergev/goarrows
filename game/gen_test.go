@@ -312,9 +312,9 @@ func TestReverseGenSolvableByConstruction(t *testing.T) {
 	}
 }
 
-// TestReverseGenDirectionDiversity locks the directional-bias fix: heads should
-// not all face the same direction. On a 24×24 board (57 heads) every cardinal
-// direction must appear and no single direction may dominate.
+// TestReverseGenDirectionDiversity locks the directional-balance fix: each
+// cardinal direction must hold roughly K/4 heads (within ±countSlack of the
+// target), on a 24×24 board (K=57).
 func TestReverseGenDirectionDiversity(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping diversity sweep in -short")
@@ -344,14 +344,67 @@ func TestReverseGenDirectionDiversity(t *testing.T) {
 				t.Fatalf("seed=%d: direction %v has 0 heads (counts=%v)", seed, Direction(d), counts)
 			}
 		}
-		maxK := 0
-		for _, k := range counts {
-			if k > maxK {
-				maxK = k
+		// The generator caps each direction at target + 2 (countSlack=2), so
+		// the spread between min and max counts cannot exceed ~5 with the
+		// targets being within 1 of each other.
+		base := total / 4
+		const maxOver = 4
+		for d, k := range counts {
+			if k > base+maxOver {
+				t.Fatalf("seed=%d: direction %v has %d heads, expected ≤ %d (counts=%v)",
+					seed, Direction(d), k, base+maxOver, counts)
 			}
 		}
-		if 10*maxK > 7*total {
-			t.Fatalf("seed=%d: one direction holds %d/%d heads (>70%%) (counts=%v)", seed, maxK, total, counts)
+	}
+}
+
+// TestReverseGenNoLocalClusters asserts that same-direction heads are never
+// Chebyshev-adjacent (distance 1). The generator enforces a hard minimum of
+// distance 2 between same-direction heads, so the immediate-neighbor count
+// must be zero on every produced board.
+func TestReverseGenNoLocalClusters(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping cluster sweep in -short")
+	}
+	const n = 24
+	for seed := uint64(1); seed <= 5; seed++ {
+		rng := rand.New(rand.NewPCG(seed, seed*4111+13))
+		b, err := GenerateBoard(n, n, rng)
+		if err != nil {
+			t.Fatalf("seed=%d gen: %v", seed, err)
+		}
+		var dirHeads [4][]Point
+		for y := 0; y < b.H; y++ {
+			for x := 0; x < b.W; x++ {
+				c := b.At(x, y)
+				if c.IsHead() {
+					fire, _ := HeadFireDir(c.R)
+					dirHeads[fire] = append(dirHeads[fire], Point{x, y})
+				}
+			}
+		}
+		for d := 0; d < 4; d++ {
+			for i, p := range dirHeads[d] {
+				for j := i + 1; j < len(dirHeads[d]); j++ {
+					q := dirHeads[d][j]
+					dx := p.X - q.X
+					if dx < 0 {
+						dx = -dx
+					}
+					dy := p.Y - q.Y
+					if dy < 0 {
+						dy = -dy
+					}
+					dist := dx
+					if dy > dist {
+						dist = dy
+					}
+					if dist < 2 {
+						t.Fatalf("seed=%d: two %v-firing heads at %v and %v are at distance %d (<2)",
+							seed, Direction(d), p, q, dist)
+					}
+				}
+			}
 		}
 	}
 }
