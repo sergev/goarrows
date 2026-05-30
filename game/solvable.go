@@ -7,39 +7,17 @@ package game
 // O(K + total_ray_length) instead of O(K²·N) by using a work-list and a per-cell
 // reverse index from cells to the heads whose rays pass through them.
 //
-// heads must list every head cell on b exactly once; the caller (the generator)
-// already tracks these. For boards without a known head list, use the wrapper
-// VerifySolvable.
+// heads must list every head cell on b exactly once. The constructive generator
+// in gen_reverse.go already tracks heads, but every board it returns is solvable
+// by construction so this function is reserved for tests and standalone callers.
 func VerifySolvableFast(b Board, heads []Point) bool {
-	K := len(heads)
-	sc := &genScratch{
-		verifyCells: make([]Cell, len(b.Data)),
-		rayClear:    make([]bool, K),
-		alive:       make([]bool, K),
-		queue:       make([]int, 0, K),
-		rayCellsBuf: make([][]int, K),
-		cellHeadsBy: make([][]int, b.W*b.H),
-	}
-	return verifySolvableFastBuf(b, heads, sc)
-}
-
-// verifySolvableFastBuf is the buffer-reusing core of VerifySolvableFast. Callers
-// that generate many boards (the generator) keep one *genScratch alive and
-// amortize allocations across attempts.
-func verifySolvableFastBuf(b Board, heads []Point, sc *genScratch) bool {
 	K := len(heads)
 	if K == 0 {
 		return b.NonEmptyCount() == 0
 	}
 
-	rayCells := sc.rayCellsBuf[:K]
-	for k := range rayCells {
-		rayCells[k] = rayCells[k][:0]
-	}
-	cellHeads := sc.cellHeadsBy[:b.W*b.H]
-	for i := range cellHeads {
-		cellHeads[i] = cellHeads[i][:0]
-	}
+	rayCells := make([][]int, K)
+	cellHeads := make([][]int, b.W*b.H)
 	for k, hp := range heads {
 		c := b.At(hp.X, hp.Y)
 		if !c.IsHead() {
@@ -57,16 +35,15 @@ func verifySolvableFastBuf(b Board, heads []Point, sc *genScratch) bool {
 		}
 	}
 
-	scratch := sc.verifyCells[:len(b.Data)]
+	scratch := make([]Cell, len(b.Data))
 	copy(scratch, b.Data)
 
-	rayClear := sc.rayClear[:K]
-	alive := sc.alive[:K]
+	rayClear := make([]bool, K)
+	alive := make([]bool, K)
 	for k := 0; k < K; k++ {
-		rayClear[k] = false
 		alive[k] = true
 	}
-	queue := sc.queue[:0]
+	queue := make([]int, 0, K)
 	for k := 0; k < K; k++ {
 		clearRay := true
 		for _, idx := range rayCells[k] {
@@ -117,7 +94,6 @@ func verifySolvableFastBuf(b Board, heads []Point, sc *genScratch) bool {
 			}
 		}
 	}
-	sc.queue = queue
 	return remaining == 0
 }
 

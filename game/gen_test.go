@@ -286,6 +286,100 @@ func TestGenGrowConstant(t *testing.T) {
 	}
 }
 
+// TestReverseGenSolvableByConstruction asserts that every board the constructive
+// reverse-order generator returns passes both ValidatePartialBoard and
+// VerifyGreedyFirstClearsBoard — i.e. solvability holds by construction without
+// needing any rejection-sampling filter.
+func TestReverseGenSolvableByConstruction(t *testing.T) {
+	sizes := []int{3, 4, 5, 6, 8, 10, 14}
+	if testing.Short() {
+		sizes = []int{3, 4, 5, 6, 8}
+	}
+	for _, n := range sizes {
+		for seed := uint64(1); seed <= 5; seed++ {
+			rng := rand.New(rand.NewPCG(seed, seed*131+11))
+			b, err := GenerateBoard(n, n, rng)
+			if err != nil {
+				t.Fatalf("n=%d seed=%d gen: %v", n, seed, err)
+			}
+			if err := ValidatePartialBoard(b); err != nil {
+				t.Fatalf("n=%d seed=%d validate: %v", n, seed, err)
+			}
+			if !VerifyGreedyFirstClearsBoard(b) {
+				t.Fatalf("n=%d seed=%d: not greedy-clearable", n, seed)
+			}
+		}
+	}
+}
+
+// TestReverseGenDirectionDiversity locks the directional-bias fix: heads should
+// not all face the same direction. On a 24×24 board (57 heads) every cardinal
+// direction must appear and no single direction may dominate.
+func TestReverseGenDirectionDiversity(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping diversity sweep in -short")
+	}
+	const n = 24
+	for seed := uint64(1); seed <= 5; seed++ {
+		rng := rand.New(rand.NewPCG(seed, seed*4111+7))
+		b, err := GenerateBoard(n, n, rng)
+		if err != nil {
+			t.Fatalf("seed=%d gen: %v", seed, err)
+		}
+		var counts [4]int
+		total := 0
+		for y := 0; y < b.H; y++ {
+			for x := 0; x < b.W; x++ {
+				c := b.At(x, y)
+				if !c.IsHead() {
+					continue
+				}
+				fire, _ := HeadFireDir(c.R)
+				counts[fire]++
+				total++
+			}
+		}
+		for d, k := range counts {
+			if k == 0 {
+				t.Fatalf("seed=%d: direction %v has 0 heads (counts=%v)", seed, Direction(d), counts)
+			}
+		}
+		maxK := 0
+		for _, k := range counts {
+			if k > maxK {
+				maxK = k
+			}
+		}
+		if 10*maxK > 7*total {
+			t.Fatalf("seed=%d: one direction holds %d/%d heads (>70%%) (counts=%v)", seed, maxK, total, counts)
+		}
+	}
+}
+
+// TestReverseGenNoCrossLinks asserts that the constructive generator produces
+// boards with no accidental cross-path port links — every connected component
+// has exactly one head and every cell's effective port degree matches its
+// expected role (head=1, internal wire=2, tail wire=1).
+func TestReverseGenNoCrossLinks(t *testing.T) {
+	sizes := []int{4, 6, 8, 12}
+	if testing.Short() {
+		sizes = []int{4, 6, 8}
+	}
+	for _, n := range sizes {
+		for seed := uint64(1); seed <= 4; seed++ {
+			rng := rand.New(rand.NewPCG(seed, seed*97+23))
+			b, err := GenerateBoard(n, n, rng)
+			if err != nil {
+				t.Fatalf("n=%d seed=%d gen: %v", n, seed, err)
+			}
+			// ValidatePartialBoard checks port degrees + one-head-per-component.
+			if err := ValidatePartialBoard(b); err != nil {
+				t.Fatalf("n=%d seed=%d cross-link or degree violation: %v", n, seed, err)
+			}
+		}
+	}
+}
+
 // TestVerifySolvableFastMatchesGreedy locks the equivalence between the row-major
 // greedy verifier and the work-list verifier across a sweep of generated boards.
 // They must accept exactly the same set of boards (monotonicity: firing only

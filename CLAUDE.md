@@ -23,13 +23,13 @@ Three packages with a strict one-way dependency: `main` → `ui` → `game`. The
 
 Add new code to the matching file rather than growing a catch-all.
 
-- `game`: `board.go` (model), `game.go` (`Game`, `TryFire`, `RayEscapes`), `ports.go` (port bitmask, `EffectivePorts`, `linked`, `directionFromTo`), `validate.go`, `path.go`, `level.go` (parsing), `gen.go` / `gen_grow.go` / `paint.go` (generation), `levels.go` (on-demand generator: `NewLevels`, `At`, `Count`, `SideLen`, `Ready`, `levelRNG`), `solvable.go` (`VerifyGreedyFirstClearsBoard`, `VerifySolvable`).
+- `game`: `board.go` (model), `game.go` (`Game`, `TryFire`, `RayEscapes`), `ports.go` (port bitmask, `EffectivePorts`, `linked`, `directionFromTo`), `validate.go`, `path.go`, `level.go` (parsing), `gen.go` / `gen_reverse.go` / `paint.go` (generation), `levels.go` (on-demand generator: `NewLevels`, `At`, `Count`, `SideLen`, `Ready`, `levelRNG`), `solvable.go` (`VerifyGreedyFirstClearsBoard`, `VerifySolvable`, `VerifySolvableFast`).
 - `ui`: `grid.go` (`DrawGrid`, `GridSize`), `overlay.go` (HUD/modals), `animation.go` (`BuildFireFrames`, `buildPointerFrames`, `fireTravelCells`).
 - `main` (root): `main.go` (event/render loop), `flags.go` (CLI + `resolveProceduralSeed`), `levels.go` (level/game glue), `cursor.go`, `fire.go` (fire outcome → status/modal), `animation.go` (`animState`, `tryStartFireAnimation`).
 
 ### Level generation
 
-Level *k* is a `(k+2)x(k+2)` grid. The "grow" generator places small arrows and randomly extends them until stuck. A board is only accepted if it passes `ValidatePartialBoard`, `growPlayfulEnough` (at most half the heads have a clear shot at start), and `VerifyGreedyFirstClearsBoard` (greedy row-major firing clears it). `VerifySolvable` (backtracking) is test-only.
+Level *k* is a `(k+2)x(k+2)` grid. The generator (`generateFullBoardReverse` in `gen_reverse.go`) places arrows one at a time in **reverse firing order** — the first arrow placed will fire last; the last placed will fire first. Each new head is positioned so its open firing ray is clear of all already-placed cells, and its body is grown by a length-capped random walk that avoids the head's own ray and any extension that would form an accidental cross-path port link. Forward play then clears every arrow by construction. `ValidatePartialBoard`, `VerifySolvableFast`, and `VerifyGreedyFirstClearsBoard` are test-only assertions of this invariant; the generation hot path runs only a `growPlayfulEnough` check (≤ half the heads fireable at start) and restarts on failure with bounded retries.
 
 ## Conventions
 
